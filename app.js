@@ -1677,20 +1677,132 @@ function getCredentialsPath() {
     return path.join(__dirname, "credentials.json");
 }
 
+function renderBackupAuthPopupResponse(success, message) {
+    const statusMessage = String(message || "");
+    const responseType = success ? "googleDriveAuthComplete" : "googleDriveAuthFailed";
+    const title = success ? "Google Drive connected" : "Google Drive connection failed";
+    const body = success
+        ? "Google Drive connected successfully. You can close this tab."
+        : `Google Drive connection failed.${statusMessage ? ` ${statusMessage}` : ""} You can close this tab and add your credentials again.`;
+
+    return `<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>${title}</title>
+</head>
+<body>
+    <p>${body}</p>
+    <script>
+        if (window.opener) {
+            window.opener.postMessage({ type: ${JSON.stringify(responseType)}, success: ${success}, message: ${JSON.stringify(statusMessage)} }, "*");
+        }
+        window.close();
+    </script>
+</body>
+</html>`;
+}
+
+function getBackupAuthErrorMessage(error, fallbackMessage) {
+    const fallback = String(fallbackMessage || "Google Drive authorization failed.").trim();
+    const rawMessage = error instanceof Error ? error.message : String(error || "");
+    const normalizedMessage = rawMessage.trim();
+    return normalizedMessage || fallback;
+}
+
+async function clearCredentialsFile() {
+    const credentialsPath = getCredentialsPath();
+    await fs.mkdir(path.dirname(credentialsPath), { recursive: true });
+    await fs.writeFile(credentialsPath, "", "utf8");
+}
+
+async function resetBackupCredentialsAfterAuthError() {
+    try {
+        await revokeAuth();
+    } catch {
+        // Ignore cleanup errors during auth reset.
+    }
+
+    try {
+        await clearCredentialsFile();
+    } catch {
+        // Ignore cleanup errors during auth reset.
+    }
+}
+
+function validateGoogleDriveCredentialsShape(credentials) {
+    const installed = credentials && typeof credentials === "object" ? credentials.installed : null;
+    if (!installed || typeof installed !== "object" || Array.isArray(installed)) {
+        return {
+            valid: false,
+            error: "Invalid credentials format. Expected an installed OAuth client object.",
+        };
+    }
+
+    const requiredStringFields = [
+        "client_id",
+        "project_id",
+        "client_secret",
+    ];
+
+    for (const fieldName of requiredStringFields) {
+        const fieldValue = String(installed[fieldName] || "").trim();
+        if (!fieldValue) {
+            return {
+                valid: false,
+                error: `Invalid credentials format. Missing required field: installed.${fieldName}.`,
+            };
+        }
+    }
+
+    const expectedUrlFields = {
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    };
+
+    for (const [fieldName, expectedValue] of Object.entries(expectedUrlFields)) {
+        const fieldValue = String(installed[fieldName] || "").trim();
+        if (fieldValue !== expectedValue) {
+            return {
+                valid: false,
+                error: `Invalid credentials format. installed.${fieldName} must be ${expectedValue}.`,
+            };
+        }
+    }
+
+    if (!Array.isArray(installed.redirect_uris) || installed.redirect_uris.length === 0) {
+        return {
+            valid: false,
+            error: "Invalid credentials format. installed.redirect_uris must be a non-empty array.",
+        };
+    }
+
+    const normalizedRedirectUris = installed.redirect_uris
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+
+    if (!normalizedRedirectUris.includes("http://localhost")) {
+        return {
+            valid: false,
+            error: "Invalid credentials format. installed.redirect_uris must include http://localhost.",
+        };
+    }
+
+    return { valid: true, error: "" };
+}
+
 async function validateCredentialsFile() {
     try {
         const credentialsPath = getCredentialsPath();
         const content = await fs.readFile(credentialsPath, "utf8");
         if (!content || content.trim().length === 0) {
-            return { valid: false };
+            return { valid: false, error: "Credentials file is empty." };
         }
         const parsed = JSON.parse(content);
-        if (!parsed.installed && !parsed.web) {
-            return { valid: false };
-        }
-        return { valid: true };
+        return validateGoogleDriveCredentialsShape(parsed);
     } catch (error) {
-        return { valid: false };
+        return { valid: false, error: "Credentials file is not valid JSON." };
     }
 }
 
@@ -1755,8 +1867,9 @@ app.post("/admin/backup/credentials", async (req, res, next) => {
             return res.status(400).json({ success: false, error: "Invalid JSON format." });
         }
 
-        if (!parsed.installed && !parsed.web) {
-            return res.status(400).json({ success: false, error: "Invalid credentials format. Expected 'installed' or 'web' object." });
+        const validation = validateGoogleDriveCredentialsShape(parsed);
+        if (!validation.valid) {
+            return res.status(400).json({ success: false, error: validation.error });
         }
 
         const credentialsPath = getCredentialsPath();
@@ -1779,20 +1892,32 @@ app.get("/admin/backup/auth", async (req, res, next) => {
         const authUrl = await getAuthUrl(credentialsPath, redirectUri);
         return res.redirect(authUrl);
     } catch (error) {
-        return next(withFunctionError("app.get /admin/backup/auth", error));
+        await resetBackupCredentialsAfterAuthError();
+        return res.status(400).send(renderBackupAuthPopupResponse(false, getBackupAuthErrorMessage(error, "The credentials file is invalid.")));
     }
 });
 
 app.get("/admin/backup/auth/callback", async (req, res, next) => {
     try {
+        const authError = String(req.query.error || "").trim();
+        const authErrorDescription = String(req.query.error_description || "").trim();
+        if (authError) {
+            await resetBackupCredentialsAfterAuthError();
+            const details = authErrorDescription || authError.replace(/_/g, " ");
+            return res.status(400).send(renderBackupAuthPopupResponse(false, getBackupAuthErrorMessage(details, "Google rejected the authorization request.")));
+        }
+
         const code = String(req.query.code || "").trim();
         if (!code) {
-            return res.status(400).send("Missing authorization code.");
+            await resetBackupCredentialsAfterAuthError();
+            return res.status(400).send(renderBackupAuthPopupResponse(false, "Missing authorization code."));
         }
+
         await exchangeCodeForToken(code);
-        return res.send(`<html><body><p>Google Drive connected successfully! You can close this tab.</p><script>if(window.opener){window.opener.postMessage({type:'googleDriveAuthComplete',success:true},'*');}window.close();</script></body></html>`);
+        return res.send(renderBackupAuthPopupResponse(true, ""));
     } catch (error) {
-        return next(withFunctionError("app.get /admin/backup/auth/callback", error));
+        await resetBackupCredentialsAfterAuthError();
+        return res.status(400).send(renderBackupAuthPopupResponse(false, getBackupAuthErrorMessage(error, "The credentials were rejected during authorization.")));
     }
 });
 

@@ -644,6 +644,24 @@
                 let activeReceiptPreviewObjectUrl = "";
                 let pendingReplaceReceiptForm = null;
                 let pendingReplaceReceiptSubmitter = null;
+                let backupAuthErrorMessage = "";
+
+                function escapeHtml (value) {
+                    return String(value || "")
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/\"/g, "&quot;")
+                        .replace(/'/g, "&#39;");
+                }
+
+                function renderBackupAuthErrorMessage () {
+                    if (!backupAuthErrorMessage) {
+                        return;
+                    }
+
+                    backupStatus.innerHTML = `<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> ${escapeHtml(backupAuthErrorMessage)}</div>`;
+                }
 
                 function setBackupNowButtonVariant (isSecondary) {
                     if (!backupNowButton) {
@@ -692,6 +710,9 @@
                         restoreFromDriveButton.classList.toggle("d-none", !authorized || !hasBackups);
                         restoreInfoSection.classList.add("d-none");
                         setBackupNowButtonVariant(false);
+                        if (backupAuthErrorMessage) {
+                            renderBackupAuthErrorMessage();
+                        }
                     } catch {
                         backupAuthSection.classList.toggle("d-none", showCredentialsInput);
                         backupCredentialsSection.classList.toggle("d-none", !showCredentialsInput);
@@ -701,6 +722,9 @@
                         restoreFromDriveButton.classList.add("d-none");
                         restoreInfoSection.classList.add("d-none");
                         setBackupNowButtonVariant(false);
+                        if (backupAuthErrorMessage) {
+                            renderBackupAuthErrorMessage();
+                        }
                     }
                 }
 
@@ -1421,6 +1445,25 @@
                 });
 
                 safeRun(() => {
+                    window.addEventListener("message", safeHandler(async (event) => {
+                        const eventType = String(event?.data?.type || "");
+                        if (eventType !== "googleDriveAuthComplete" && eventType !== "googleDriveAuthFailed") {
+                            return;
+                        }
+
+                        backupAuthErrorMessage = eventType === "googleDriveAuthFailed"
+                            ? String(event?.data?.message || "Google Drive authorization failed.")
+                            : "";
+                        await refreshBackupAuthState();
+                        if (backupAuthErrorMessage) {
+                            renderBackupAuthErrorMessage();
+                        } else {
+                            backupStatus.innerHTML = "";
+                        }
+                    }));
+                });
+
+                safeRun(() => {
                     if (saveCredentialsButton) {
                         saveCredentialsButton.addEventListener("click", safeHandler(async () => {
                             try {
@@ -1446,6 +1489,8 @@
 
                                 const data = await response.json();
                                 if (data.success) {
+                                    backupAuthErrorMessage = "";
+                                    backupStatus.innerHTML = "";
                                     credentialsSaveStatus.innerHTML = '<div class="alert alert-success py-1 px-2 small mb-0">Credentials saved successfully!</div>';
                                     credentialsJsonInput.value = "";
                                     setTimeout(async () => {

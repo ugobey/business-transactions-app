@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>" class="<%= settings.compactUiMode ? 'ui-compact' : '' %> <%= settings.extraCompactUiMode ? 'ui-extra-compact' : '' %>">
 
     <head>
         <meta charset="UTF-8" />
@@ -13,7 +13,7 @@
         <link rel="stylesheet" href="/css/styles.css" />
     </head>
 
-    <body class="app-bg">
+    <body class="app-bg <%= settings.compactUiMode ? 'ui-compact' : '' %> <%= settings.extraCompactUiMode ? 'ui-extra-compact' : '' %>">
         <header class="navbar navbar-expand-lg app-navbar py-3">
             <div class="container-xxl">
                 <div>
@@ -515,6 +515,18 @@
                                 <input id="maxBackupsToDisplay" name="maxBackupsToDisplay" type="number" min="1" step="1" class="form-control" value="<%= settings.maxBackupsToDisplay || 10 %>" required />
                                 <div class="form-text">Maximum number of backups to show in the restore list.</div>
                             </div>
+
+                            <div id="compactUiModeContainer" class="form-check form-switch pt-1">
+                                <input id="compactUiMode" name="compactUiMode" type="checkbox" class="form-check-input" <%= settings.compactUiMode ? 'checked' : '' %> />
+                                <label for="compactUiMode" class="form-check-label fw-semibold"><%= labels.compactUiMode || 'Compact UI for 1800 x 1169' %></label>
+                                <div class="form-text"><%= labels.compactUiModeHelp || 'Reduces font and component sizes for denser screens.' %></div>
+                            </div>
+
+                            <div id="extraCompactUiModeContainer" class="form-check form-switch pt-1">
+                                <input id="extraCompactUiMode" name="extraCompactUiMode" type="checkbox" class="form-check-input" <%= settings.extraCompactUiMode ? 'checked' : '' %> />
+                                <label for="extraCompactUiMode" class="form-check-label fw-semibold"><%= labels.extraCompactUiMode || 'Extra compact mode' %></label>
+                                <div id="extraCompactUiModeHelpText" class="form-text"><%= labels.extraCompactUiModeHelp || 'Applies an even smaller scale for high-density screens.' %></div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
@@ -640,6 +652,10 @@
                 const receiptPreviewDownloadButton = document.getElementById("receiptPreviewDownloadButton");
                 const receiptPreviewModal = receiptPreviewModalElement ? new bootstrap.Modal(receiptPreviewModalElement) : null;
                 const openSettingsModalButton = document.getElementById("openSettingsModalButton");
+                const compactUiModeInput = document.getElementById("compactUiMode");
+                const extraCompactUiModeInput = document.getElementById("extraCompactUiMode");
+                const extraCompactUiModeContainer = document.getElementById("extraCompactUiModeContainer");
+                const extraCompactUiModeHelpText = document.getElementById("extraCompactUiModeHelpText");
                 const backupModalElement = document.getElementById("backupModal");
                 const backupModal = backupModalElement ? new bootstrap.Modal(backupModalElement) : null;
                 const backupHelpModalElement = document.getElementById("backupHelpModal");
@@ -706,6 +722,29 @@
 
                     backupNowButton.classList.toggle("btn-secondary", isSecondary);
                     backupNowButton.classList.toggle("btn-primary", !isSecondary);
+                }
+
+                function syncCompactModeControls () {
+                    if (!compactUiModeInput || !extraCompactUiModeInput) {
+                        return;
+                    }
+
+                    const compactEnabled = Boolean(compactUiModeInput.checked);
+                    if (!compactEnabled && extraCompactUiModeInput.checked) {
+                        extraCompactUiModeInput.checked = false;
+                    }
+
+                    extraCompactUiModeInput.disabled = !compactEnabled;
+
+                    if (extraCompactUiModeContainer) {
+                        extraCompactUiModeContainer.classList.toggle("opacity-50", !compactEnabled);
+                    }
+
+                    if (extraCompactUiModeHelpText) {
+                        extraCompactUiModeHelpText.textContent = compactEnabled
+                            ? (<%- JSON.stringify(labels.extraCompactUiModeHelp || "Applies an even smaller scale for high-density screens.") %>)
+                            : (<%- JSON.stringify(labels.extraCompactUiModeRequiresCompact || "Enable Compact UI first to unlock Extra compact mode.") %>);
+                    }
                 }
 
                 async function refreshBackupAuthState () {
@@ -1440,8 +1479,25 @@
                 });
 
                 safeRun(() => {
+                    if (compactUiModeInput && extraCompactUiModeInput) {
+                        syncCompactModeControls();
+
+                        compactUiModeInput.addEventListener("change", safeHandler(() => {
+                            syncCompactModeControls();
+                        }));
+
+                        extraCompactUiModeInput.addEventListener("change", safeHandler(() => {
+                            if (extraCompactUiModeInput.checked && !compactUiModeInput.checked) {
+                                compactUiModeInput.checked = true;
+                            }
+
+                            syncCompactModeControls();
+                        }));
+                    }
+
                     if (openSettingsModalButton && settingsModal) {
                         openSettingsModalButton.addEventListener("click", safeHandler(() => {
+                            syncCompactModeControls();
                             settingsModal.show();
                         }));
                     }

@@ -17,6 +17,34 @@ html {
     font-size: 15px;
 }
 
+html.ui-compact {
+    font-size: 13px;
+}
+
+html.ui-extra-compact {
+    font-size: 12px;
+}
+
+@media (max-width: 1680px) {
+    html.ui-compact {
+        font-size: 12px;
+    }
+
+    html.ui-extra-compact {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 1440px) {
+    html.ui-compact {
+        font-size: 10px;
+    }
+
+    html.ui-extra-compact {
+        font-size: 9px;
+    }
+}
+
 @media (max-width: 1680px) {
     html {
         font-size: 13px;
@@ -41,6 +69,52 @@ body {
     letter-spacing: -0.2px;
     font-weight: 400;
     color: var(--ia-text);
+}
+
+body.ui-compact .app-main-shell {
+    max-width: 1800px;
+}
+
+body.ui-compact .card-header {
+    padding: 1rem 1.1rem;
+}
+
+body.ui-compact .card-body {
+    padding: 0.95rem;
+}
+
+body.ui-compact .btn {
+    --bs-btn-padding-y: 0.34rem;
+    --bs-btn-padding-x: 0.68rem;
+}
+
+body.ui-compact .table th,
+body.ui-compact .table td {
+    padding-top: 0.44rem;
+    padding-bottom: 0.44rem;
+}
+
+body.ui-extra-compact .app-main-shell {
+    max-width: 1700px;
+}
+
+body.ui-extra-compact .card-header {
+    padding: 0.82rem 0.95rem;
+}
+
+body.ui-extra-compact .card-body {
+    padding: 0.75rem;
+}
+
+body.ui-extra-compact .btn {
+    --bs-btn-padding-y: 0.25rem;
+    --bs-btn-padding-x: 0.55rem;
+}
+
+body.ui-extra-compact .table th,
+body.ui-extra-compact .table td {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
 }
 
 .app-bg {

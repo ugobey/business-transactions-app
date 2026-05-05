@@ -248,6 +248,11 @@ const TRANSLATIONS = {
         appBrand: "Navbar Brand",
         receiptPrefix: "Receipt Prefix",
         receiptPrefixHelp: "Optional prefix automatically added to every receipt number.",
+        compactUiMode: "Compact UI for 1800 x 1169",
+        compactUiModeHelp: "Reduces font and component sizes for denser screens.",
+        extraCompactUiMode: "Extra compact mode",
+        extraCompactUiModeHelp: "Applies an even smaller scale for high-density screens.",
+        extraCompactUiModeRequiresCompact: "Enable Compact UI first to unlock Extra compact mode.",
         successSettingsSaved: "Settings saved successfully.",
         invalidSettings: "Please provide a valid annual threshold and an alert percent between 1 and 100.",
         annualAlertTitle: "Annual Threshold Alert",
@@ -422,6 +427,11 @@ const TRANSLATIONS = {
         appBrand: "כותרת בסרגל הניווט",
         receiptPrefix: "קידומת מספר קבלה",
         receiptPrefixHelp: "קידומת אופציונלית שמתווספת אוטומטית לכל מספר קבלה.",
+        compactUiMode: "תצוגה קומפקטית לרזולוציה 1800 x 1169",
+        compactUiModeHelp: "מקטין את גודל הטקסט והרכיבים לתצוגה צפופה יותר.",
+        extraCompactUiMode: "מצב קומפקטי במיוחד",
+        extraCompactUiModeHelp: "מפעיל קנה מידה קטן יותר למסכים צפופים במיוחד.",
+        extraCompactUiModeRequiresCompact: "יש להפעיל קודם תצוגה קומפקטית כדי לאפשר מצב קומפקטי במיוחד.",
         successSettingsSaved: "ההגדרות נשמרו בהצלחה.",
         invalidSettings: "נא להזין סף שנתי תקין ואחוז התראה בין 1 ל-100.",
         annualAlertTitle: "התראת סף שנתי",
@@ -1699,6 +1709,9 @@ app.post("/settings", async (req, res, next) => {
         const receiptPrefix = String(req.body.receiptPrefix || "").trim();
         const maxBackupsToKeep = Number(req.body.maxBackupsToKeep);
         const maxBackupsToDisplay = Number(req.body.maxBackupsToDisplay);
+        const compactUiMode = req.body.compactUiMode === "on";
+        const extraCompactUiMode = req.body.extraCompactUiMode === "on";
+        const effectiveCompactUiMode = compactUiMode || extraCompactUiMode;
         const isValid = Number.isFinite(annualTotalThreshold)
             && annualTotalThreshold > 0
             && Number.isFinite(annualAlertPercent)
@@ -1726,6 +1739,8 @@ app.post("/settings", async (req, res, next) => {
             receiptPrefix,
             maxBackupsToKeep,
             maxBackupsToDisplay,
+            compactUiMode: effectiveCompactUiMode,
+            extraCompactUiMode,
         });
 
         return res.redirect(buildIndexPath({ success: 5, page, filters }));

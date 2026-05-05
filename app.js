@@ -16,7 +16,7 @@ const {
     undoRefundByAuditId,
 } = require("./lib/database");
 require("dotenv").config();
-const { backupAppData, initializeAuth, getAuthUrl, exchangeCodeForToken, revokeAuth } = require("./lib/backup");
+const { backupAppData, initializeAuth, getAuthUrl, exchangeCodeForToken, revokeAuth, listBackupFiles, restoreAppData } = require("./lib/backup");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -313,6 +313,14 @@ const TRANSLATIONS = {
         customerIdMismatch: "Customer ID must match the existing customer record for this payer.",
         customerNameMismatch: "This Customer ID is already linked to a different payer.",
         backup: "Backup",
+        backupRestore: "Backup / Restore",
+        restore: "Restore",
+        restoreFromDrive: "Restore from Drive",
+        restoreLatestBackup: "Latest backup on Drive:",
+        restoreNoBackups: "No backups found on Google Drive.",
+        restoreConfirmTitle: "Restore from Backup",
+        restoreConfirmBody: "This will replace all current transactions, audit trail, and receipts with data from the latest backup. This cannot be undone.",
+        restoreConfirmButton: "Yes, Restore",
         backupTitle: "Google Drive Backup",
         backupDescription: "Backup your transactions, audit trail, and receipts to Google Drive.",
     },
@@ -459,6 +467,14 @@ const TRANSLATIONS = {
         customerIdMismatch: "מזהה הלקוח חייב להתאים לרשומת הלקוח הקיימת עבור משלם זה.",
         customerNameMismatch: "מזהה לקוח זה כבר משויך למשלם אחר.",
         backup: "גיבוי",
+        backupRestore: "גיבוי / שחזור",
+        restore: "שחזור",
+        restoreFromDrive: "שחזור מ-Drive",
+        restoreLatestBackup: "גיבוי אחרון ב-Drive:",
+        restoreNoBackups: "לא נמצאו קבצי גיבוי ב-Google Drive.",
+        restoreConfirmTitle: "שחזור מגיבוי",
+        restoreConfirmBody: "פעולה זו תחליף את כל הנתונים הנוכחיים (עסקאות, יומן ביקורת וקבלות) בנתונים מהגיבוי האחרון. לא ניתן לבטל פעולה זו.",
+        restoreConfirmButton: "כן, שחזר",
         backupTitle: "גיבוי Google Drive",
         backupDescription: "גבה את ההעסקאות שלך, יומן ביקורת וקבלות ל-Google Drive.",
     },
@@ -1829,6 +1845,79 @@ app.get("/admin/backup/progress/:jobId", (req, res) => {
     }
 
     return res.json({ success: true, job });
+});
+
+app.get("/admin/restore/backups", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+        }
+        const authorized = await initializeAuth(credentialsPath);
+        if (!authorized) {
+            return res.status(401).json({ success: false, error: "not_authorized" });
+        }
+        const files = await listBackupFiles();
+        return res.json({ success: true, files });
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/restore/backups", error));
+    }
+});
+
+app.post("/admin/restore/start", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+        }
+        const authorized = await initializeAuth(credentialsPath);
+        if (!authorized) {
+            return res.status(401).json({ success: false, error: "not_authorized" });
+        }
+        const job = createBackupJob();
+        const selectedFileId = String(req.body.fileId || "").trim();
+        void (async () => {
+            try {
+                const dataFilePath = path.join(__dirname, "data", "transactions.json");
+                const auditFilePath = path.join(__dirname, "data", "audit-trail.json");
+                const uploadsPath = path.join(__dirname, "uploads");
+                const result = await restoreAppData(
+                    dataFilePath,
+                    auditFilePath,
+                    uploadsPath,
+                    (progress) => {
+                        const currentJob = backupJobs.get(job.id);
+                        if (!currentJob) return;
+                        currentJob.stage = String(progress.stage || currentJob.stage);
+                        currentJob.percent = Math.max(0, Math.min(100, Number(progress.percent || currentJob.percent)));
+                        currentJob.message = String(progress.message || currentJob.message);
+                    },
+                    selectedFileId,
+                );
+                const currentJob = backupJobs.get(job.id);
+                if (currentJob) {
+                    currentJob.status = "completed";
+                    currentJob.stage = "completed";
+                    currentJob.percent = 100;
+                    currentJob.message = "Restore completed successfully.";
+                    currentJob.result = result;
+                }
+            } catch (error) {
+                const currentJob = backupJobs.get(job.id);
+                if (currentJob) {
+                    currentJob.status = "failed";
+                    currentJob.stage = "failed";
+                    currentJob.message = "Restore failed.";
+                    currentJob.error = error.message;
+                }
+            } finally {
+                cleanupBackupJobLater(job.id);
+            }
+        })();
+        return res.json({ success: true, jobId: job.id });
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/restore/start", error));
+    }
 });
 
 app.post("/admin/uploads/cleanup-if-empty", async (req, res, next) => {

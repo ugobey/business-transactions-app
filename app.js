@@ -1336,6 +1336,22 @@ function getAuditCustomerId(entry, entriesById = new Map()) {
     }
 }
 
+async function readBackupSetupStepsContent() {
+    try {
+        const backupSetupPath = path.join(__dirname, "BACKUP_SETUP.md");
+        const markdown = await fs.readFile(backupSetupPath, "utf8");
+        const sectionMatch = markdown.match(/## Setup Steps\s*([\s\S]*?)(?:\n##\s|$)/);
+
+        if (!sectionMatch) {
+            return "Setup steps are currently unavailable.";
+        }
+
+        return sectionMatch[1].trim();
+    } catch {
+        return "Setup steps are currently unavailable.";
+    }
+}
+
 async function renderIndex(res, options = {}) {
     try {
         const lang = getLanguage(options.lang);
@@ -1356,6 +1372,7 @@ async function renderIndex(res, options = {}) {
         const currentPage = Math.min(requestedPage, totalPages);
         const startIndex = (currentPage - 1) * PAGE_SIZE;
         const pageTransactions = filteredTransactions.slice(startIndex, startIndex + PAGE_SIZE);
+        const backupSetupStepsContent = await readBackupSetupStepsContent();
 
         return res.status(options.statusCode || 200).render("index", {
             lang,
@@ -1413,6 +1430,7 @@ async function renderIndex(res, options = {}) {
                     .filter(Boolean)
                     .map((purpose) => [purpose.toLowerCase(), purpose]),
             ).values()),
+            backupSetupStepsContent,
             ...annualThresholdStatus,
         });
     } catch (error) {

@@ -521,6 +521,7 @@
                         <div id="backupCredentialsSection" class="d-none">
                             <p class="mb-3 text-muted small">Your Google credentials file is missing or invalid. Paste your <strong>credentials.json</strong> content below:</p>
                             <textarea id="credentialsJsonInput" class="form-control mb-2" rows="8" placeholder="Paste the entire contents of your credentials.json file here..."></textarea>
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mb-2" id="openBackupHelpButton">Help: How do I get credentials.json?</button>
                             <button type="button" class="btn btn-sm btn-primary w-100" id="saveCredentialsButton">Save Credentials</button>
                             <div id="credentialsSaveStatus" class="mt-2"></div>
                         </div>
@@ -573,6 +574,23 @@
             </div>
         </div>
 
+        <div class="modal fade" id="backupHelpModal" tabindex="-1" aria-labelledby="backupHelpModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="backupHelpModalLabel">Google Drive Backup Setup Help</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body">
+                        <pre class="mb-0 small" style="white-space: pre-wrap;"><%= backupSetupStepsContent %></pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <form id="deleteTransactionForm" method="POST" class="d-none">
             <input type="hidden" name="page" value="<%= currentPage %>" />
             <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
@@ -609,6 +627,8 @@
                 const openSettingsModalButton = document.getElementById("openSettingsModalButton");
                 const backupModalElement = document.getElementById("backupModal");
                 const backupModal = backupModalElement ? new bootstrap.Modal(backupModalElement) : null;
+                const backupHelpModalElement = document.getElementById("backupHelpModal");
+                const backupHelpModal = backupHelpModalElement ? new bootstrap.Modal(backupHelpModalElement) : null;
                 const openBackupModalButton = document.getElementById("openBackupModalButton");
                 const backupNowButton = document.getElementById("backupNowButton");
                 const backupStatus = document.getElementById("backupStatus");
@@ -619,6 +639,7 @@
                 const restoreFromDriveButton = document.getElementById("restoreFromDriveButton");
                 const backupCredentialsSection = document.getElementById("backupCredentialsSection");
                 const credentialsJsonInput = document.getElementById("credentialsJsonInput");
+                const openBackupHelpButton = document.getElementById("openBackupHelpButton");
                 const saveCredentialsButton = document.getElementById("saveCredentialsButton");
                 const credentialsSaveStatus = document.getElementById("credentialsSaveStatus");
                 const restoreInfoSection = document.getElementById("restoreInfoSection");
@@ -1419,6 +1440,23 @@
                             backupModal.show();
                             await refreshBackupAuthState();
                             backupStatus.innerHTML = "";
+                        }));
+                    }
+                });
+
+                safeRun(() => {
+                    if (openBackupHelpButton && backupHelpModal && backupModal) {
+                        openBackupHelpButton.addEventListener("click", safeHandler(() => {
+                            backupModal.hide();
+                            backupHelpModal.show();
+                        }));
+                    }
+
+                    if (backupHelpModalElement && backupModal) {
+                        backupHelpModalElement.addEventListener("hidden.bs.modal", safeHandler(() => {
+                            if (!backupCredentialsSection.classList.contains("d-none")) {
+                                backupModal.show();
+                            }
                         }));
                     }
                 });

@@ -842,6 +842,12 @@
                                 const mustHaveReference = shouldRequirePaymentReference(paymentMethodSelect.value, currentStatus);
                                 const shouldShowReferenceField = String(paymentMethodSelect.value || "").trim().toLowerCase() !== "cash";
                                 paymentReferenceInput.required = mustHaveReference;
+                                
+                                // If payment method is cash, clear the payment reference field
+                                if (String(paymentMethodSelect.value || "").trim().toLowerCase() === "cash") {
+                                    paymentReferenceInput.value = "";
+                                }
+                                
                                 if (paymentReferenceWrapper) {
                                     paymentReferenceWrapper.classList.toggle("d-none", !shouldShowReferenceField);
                                 }

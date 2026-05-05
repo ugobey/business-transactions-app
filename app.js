@@ -81,6 +81,7 @@ const TRANSLATIONS = {
         details: "Details",
         noAuditEntries: "No audit entries yet.",
         undoFromAudit: "Undo Delete",
+        undoRefundFromAudit: "Undo Refund",
         undoUnavailable: "Undo unavailable",
         settings: "Settings",
         stats: "Stats",
@@ -210,6 +211,7 @@ const TRANSLATIONS = {
         details: "פרטים",
         noAuditEntries: "עדיין אין רשומות ביומן הביקורת.",
         undoFromAudit: "שחזור מחיקה",
+        undoRefundFromAudit: "ביטול החזר",
         undoUnavailable: "שחזור לא זמין",
         settings: "הגדרות",
         stats: "סטטיסטיקות",
@@ -765,7 +767,9 @@ function getSignedTransactionAmount(transaction) {
         const rawAmount = Number(transaction?.amount || 0);
         const safeAmount = Number.isFinite(rawAmount) ? rawAmount : 0;
         const isRefunded = String(transaction?.status || "").toLowerCase() === "refunded" || Boolean(transaction?.is_refund);
-        return isRefunded ? -Math.abs(safeAmount) : safeAmount;
+
+        // Refunded transactions are removed from revenue totals rather than counted as negative revenue.
+        return isRefunded ? 0 : Math.abs(safeAmount);
     } catch (error) {
         throw withFunctionError("getSignedTransactionAmount", error);
     }
@@ -897,11 +901,11 @@ function calculateStatistics(transactions, lang, labels) {
             const isRefund = String(item.status || "").toLowerCase() === "refunded" || Boolean(item.is_refund);
             if (isRefund) {
                 refundCount += 1;
-                totalRefundedAmount += Math.abs(amount);
+                totalRefundedAmount += Math.abs(Number(item.amount || 0));
             }
 
             const paymentMethod = String(item.payment_method || "cash").trim().toLowerCase();
-            if (paymentMethodTotals.has(paymentMethod)) {
+            if (paymentMethodTotals.has(paymentMethod) && amount > 0 && !isRefund) {
                 const existingMethodTotals = paymentMethodTotals.get(paymentMethod) || { count: 0, total: 0 };
                 paymentMethodTotals.set(paymentMethod, {
                     count: existingMethodTotals.count + 1,

@@ -177,14 +177,14 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #2550d8 0%, #1f44bb 56%, #16358f 100%);
+    background-color: #2550d8;
     border-color: #2248c4;
 }
 
 .btn-primary:hover,
 .btn-primary:focus,
 .btn-primary:active {
-    background: linear-gradient(135deg, #1f44bb 0%, #1b3ca7 56%, #132f7e 100%);
+    background-color: #1f44bb;
     border-color: #1b3ca7;
 }
 
@@ -203,6 +203,36 @@ body {
 .btn-success:hover {
     background: linear-gradient(135deg, #166f4f 0%, #1b7e5c 58%, #239f74 100%);
     border-color: #166f4f;
+}
+
+.btn-ledger-refund,
+.btn-ledger-delete,
+.btn-ledger-cancel {
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.btn-ledger-refund:hover,
+.btn-ledger-refund:focus {
+    background-color: #f0a800;
+    border-color: #e09b00;
+    color: #1f2328;
+    transform: translateY(-1px);
+}
+
+.btn-ledger-delete:hover,
+.btn-ledger-delete:focus {
+    background-color: #aa2d40;
+    border-color: #972638;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.btn-ledger-cancel:hover,
+.btn-ledger-cancel:focus {
+    background-color: #4b5563;
+    border-color: #424b57;
+    color: #ffffff;
+    transform: translateY(-1px);
 }
 
 .alert-danger {

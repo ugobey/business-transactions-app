@@ -20,6 +20,7 @@
                     <p class="text-white-50 mb-0 small"><%= labels.auditTrail %></p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <a class="btn btn-sm btn-outline-light" href="/"><%= labels.backToLedger %></a>
+                        <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
                     </div>
                 </div>
             </div>
@@ -73,7 +74,7 @@
                                         <% } else if (entry.action === 'refund') { %>
                                         <% if (!entry.undo?.restoredAt) { %>
                                         <form action="/admin/audit/<%= entry.id %>/undo-refund" method="POST" class="d-inline">
-                                            <button type="submit" class="btn btn-sm btn-outline-primary"><%= labels.undo %></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"><%= labels.undoRefundFromAudit %></button>
                                         </form>
                                         <% } else { %>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" disabled><%= labels.undoUnavailable %></button>

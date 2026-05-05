@@ -226,14 +226,16 @@
                                         </tr>
                                         <% } else { %>
                                         <% transactions.forEach((item) => { %>
-                                        <tr class="ledger-view-row" data-item-id="<%= item.id %>">
-                                            <td class="editable-cell col-receipt" data-open-editor="edit-<%= item.id %>"><%= item.receiptNumber %></td>
-                                            <td class="editable-cell col-date" data-open-editor="edit-<%= item.id %>"><%= item.date %></td>
-                                            <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.paidBy %></td>
-                                            <td><span class="badge text-bg-light"><%= item.customer_id || '-' %></span></td>
-                                            <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.purpose %></td>
-                                            <td class="text-end fw-semibold editable-cell" data-open-editor="edit-<%= item.id %>"><%= formatCurrency(item.amount) %></td>
+                                        <% const isRefunded = item.status === 'refunded' || item.is_refund; %>
+                                        <tr class="ledger-view-row <%= isRefunded ? 'table-secondary text-secondary' : '' %>" data-item-id="<%= item.id %>" <% if (!isRefunded) { %>data-open-editor="edit-<%= item.id %>"<% } %>>
+                                            <td class="<%= isRefunded ? 'col-receipt' : 'editable-cell col-receipt' %>"><%= item.receiptNumber %></td>
+                                            <td class="<%= isRefunded ? 'col-date' : 'editable-cell col-date' %>"><%= item.date %></td>
+                                            <td class="<%= isRefunded ? '' : 'editable-cell' %>"><%= item.paidBy %></td>
+                                            <td class="<%= isRefunded ? '' : 'editable-cell' %>"><span class="badge text-bg-light"><%= item.customer_id || '-' %></span></td>
+                                            <td class="<%= isRefunded ? '' : 'editable-cell' %>"><%= item.purpose %></td>
+                                            <td class="text-end fw-semibold <%= isRefunded ? '' : 'editable-cell' %>"><%= formatCurrency(item.amount) %></td>
                                             <td class="text-end">
+                                                <% if (!isRefunded) { %>
                                                 <form action="/transactions/<%= item.id %>/refund" method="POST" class="d-inline">
                                                     <input type="hidden" name="page" value="<%= currentPage %>" />
                                                     <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
@@ -241,10 +243,12 @@
                                                     <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
                                                     <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
                                                     <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-warning" <%= item.status === 'refunded' ? 'disabled' : '' %>><%= labels.refund %></button>
+                                                    <button type="submit" class="btn btn-sm btn-warning text-dark btn-ledger-refund"><%= labels.refund %></button>
                                                 </form>
+                                                <% } %>
                                             </td>
                                         </tr>
+                                        <% if (!isRefunded) { %>
                                         <tr id="edit-<%= item.id %>" class="ledger-edit-row" hidden>
                                             <td colspan="7">
                                                 <form id="update-<%= item.id %>" action="/transactions/<%= item.id %>/update" method="POST" enctype="multipart/form-data" class="ledger-edit-form" data-transaction-id="<%= item.id %>" data-original-receipt="<%= item.receiptNumber %>">
@@ -315,13 +319,16 @@
                                                     </div>
                                                     <div class="d-flex gap-2 justify-content-end mt-3">
                                                         <button type="submit" class="btn btn-success d-none" data-update-button><%= labels.update %></button>
-                                                        <button type="submit" formaction="/transactions/<%= item.id %>/refund" formmethod="POST" class="btn btn-outline-warning" <%= item.status === 'refunded' ? 'disabled' : '' %>><%= labels.refund %></button>
-                                                        <button type="button" class="btn btn-outline-danger" data-open-delete-modal="<%= item.id %>"><%= labels.delete %></button>
-                                                        <button type="button" class="btn btn-outline-secondary" data-close-editor="edit-<%= item.id %>"><%= labels.cancel %></button>
+                                                        <% if (!(item.status === 'refunded' || item.is_refund)) { %>
+                                                        <button type="submit" formaction="/transactions/<%= item.id %>/refund" formmethod="POST" class="btn btn-warning text-dark btn-ledger-refund"><%= labels.refund %></button>
+                                                        <% } %>
+                                                        <button type="button" class="btn btn-danger btn-ledger-delete" data-open-delete-modal="<%= item.id %>"><%= labels.delete %></button>
+                                                        <button type="button" class="btn btn-secondary btn-ledger-cancel" data-close-editor="edit-<%= item.id %>"><%= labels.cancel %></button>
                                                     </div>
                                                 </form>
                                             </td>
                                         </tr>
+                                        <% } %>
                                         <% }) %>
                                         <% } %>
                                     </tbody>
@@ -955,7 +962,14 @@
                     }
 
                     document.querySelectorAll("[data-open-editor]").forEach((element) => {
-                        element.addEventListener("click", safeHandler(() => {
+                        element.addEventListener("click", safeHandler((event) => {
+                            const clickedInteractiveElement = event.target instanceof Element
+                                ? event.target.closest("button, a, input, select, textarea, form, label")
+                                : null;
+                            if (clickedInteractiveElement) {
+                                return;
+                            }
+
                             const editorId = element.getAttribute("data-open-editor");
                             openEditor(editorId);
                         }));

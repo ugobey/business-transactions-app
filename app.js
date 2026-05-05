@@ -1728,7 +1728,7 @@ app.get("/admin/backup/auth/callback", async (req, res, next) => {
             return res.status(400).send("Missing authorization code.");
         }
         await exchangeCodeForToken(code);
-        return res.send(`<html><body><p>Google Drive connected successfully! You can close this tab.</p><script>window.close();</script></body></html>`);
+        return res.send(`<html><body><p>Google Drive connected successfully! You can close this tab.</p><script>if(window.opener){window.opener.postMessage({type:'googleDriveAuthComplete',success:true},'*');}window.close();</script></body></html>`);
     } catch (error) {
         return next(withFunctionError("app.get /admin/backup/auth/callback", error));
     }

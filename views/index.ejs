@@ -507,8 +507,7 @@
                         <div id="backupAuthSection" class="d-none">
                             <p class="mb-3 text-muted small">Connect your Google account to back up transactions, audit trail, and receipts to your personal Google Drive.</p>
                             <a href="/admin/backup/auth" target="_blank" class="btn btn-outline-primary w-100" id="backupConnectButton">Connect Google Drive</a>
-                            <p class="mt-2 text-muted small text-center">A new tab will open for authorization. Return here and click "Check Connection" after approving.</p>
-                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-1" id="backupCheckConnectionButton">Check Connection</button>
+                            <p class="mt-2 text-muted small text-center">A new tab will open for authorization.</p>
                         </div>
                         <div id="backupConnectedSection" class="d-none">
                             <div class="alert alert-success py-2 mb-3">✓ Google Drive connected</div>
@@ -596,7 +595,6 @@
                 const backupResults = document.getElementById("backupResults");
                 const backupAuthSection = document.getElementById("backupAuthSection");
                 const backupConnectedSection = document.getElementById("backupConnectedSection");
-                const backupCheckConnectionButton = document.getElementById("backupCheckConnectionButton");
                 const backupDisconnectButton = document.getElementById("backupDisconnectButton");
                 const restoreFromDriveButton = document.getElementById("restoreFromDriveButton");
                 const restoreInfoSection = document.getElementById("restoreInfoSection");
@@ -1353,14 +1351,27 @@
                 });
 
                 safeRun(() => {
-                    if (backupCheckConnectionButton) {
-                        backupCheckConnectionButton.addEventListener("click", safeHandler(async () => {
-                            backupCheckConnectionButton.disabled = true;
-                            await refreshBackupAuthState();
-                            backupCheckConnectionButton.disabled = false;
+                    const backupConnectButton = document.getElementById("backupConnectButton");
+                    if (backupConnectButton) {
+                        backupConnectButton.addEventListener("click", safeHandler((event) => {
+                            event.preventDefault();
+                            const authUrl = backupConnectButton.href || "/admin/backup/auth";
+                            const authWindow = window.open(authUrl, "GoogleDriveAuth", "width=600,height=700");
+                            if (authWindow) {
+                                const checkClosed = setInterval(() => {
+                                    if (authWindow.closed) {
+                                        clearInterval(checkClosed);
+                                        setTimeout(async () => {
+                                            await refreshBackupAuthState();
+                                        }, 500);
+                                    }
+                                }, 300);
+                            }
                         }));
                     }
+                });
 
+                safeRun(() => {
                     if (backupDisconnectButton) {
                         backupDisconnectButton.addEventListener("click", safeHandler(async () => {
                             await fetch("/admin/backup/revoke", { method: "POST" });

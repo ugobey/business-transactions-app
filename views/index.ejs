@@ -69,7 +69,18 @@
                             </div>
                             <% } %>
 
-                            <form action="/transactions" method="POST" class="vstack gap-3" novalidate>
+                            <datalist id="knownCustomersList">
+                                <% customerDirectory.forEach((entry) => { %>
+                                <option value="<%= entry.paidBy %>" data-customer-id="<%= entry.customerId %>"></option>
+                                <% }) %>
+                            </datalist>
+                            <datalist id="knownCustomerIdsList">
+                                <% customerDirectory.forEach((entry) => { %>
+                                <option value="<%= entry.customerId %>"></option>
+                                <% }) %>
+                            </datalist>
+
+                            <form action="/transactions" method="POST" enctype="multipart/form-data" class="vstack gap-3" novalidate>
                                 <div>
                                     <label for="receiptNumber" class="form-label fw-semibold"><%= labels.receiptNumber %></label>
                                     <input id="receiptNumber" name="receiptNumber" type="text" maxlength="40" placeholder="RCPT-2026-001" value="<%= formData.receiptNumber %>" class="form-control" required />
@@ -99,7 +110,61 @@
 
                                 <div>
                                     <label for="paidBy" class="form-label fw-semibold"><%= labels.whoPaid %></label>
-                                    <input id="paidBy" name="paidBy" type="text" maxlength="80" placeholder="Client or company name" value="<%= formData.paidBy %>" class="form-control" required />
+                                    <input id="paidBy" name="paidBy" type="text" maxlength="80" placeholder="Client or company name" value="<%= formData.paidBy %>" class="form-control" list="knownCustomersList" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="customer_id" class="form-label fw-semibold"><%= labels.customerId %></label>
+                                    <input id="customer_id" name="customer_id" type="text" maxlength="80" value="<%= formData.customer_id %>" class="form-control" list="knownCustomerIdsList" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="payment_method" class="form-label fw-semibold"><%= labels.paymentMethod %></label>
+                                    <select id="payment_method" name="payment_method" class="form-select" required>
+                                        <option value="cash" <%= formData.payment_method === 'cash' ? 'selected' : '' %>>Cash</option>
+                                        <option value="credit_card" <%= formData.payment_method === 'credit_card' ? 'selected' : '' %>>Credit Card</option>
+                                        <option value="bank_transfer" <%= formData.payment_method === 'bank_transfer' ? 'selected' : '' %>>Bank Transfer</option>
+                                        <option value="cheque" <%= formData.payment_method === 'cheque' ? 'selected' : '' %>>Cheque</option>
+                                    </select>
+                                </div>
+
+                                <div data-payment-reference-wrapper>
+                                    <label for="payment_reference" class="form-label fw-semibold"><%= labels.paymentReference %></label>
+                                    <input id="payment_reference" name="payment_reference" type="text" maxlength="120" value="<%= formData.payment_reference %>" class="form-control" />
+                                    <div class="form-text"><%= labels.paymentReferenceHelp %></div>
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="status" class="form-label fw-semibold"><%= labels.status %></label>
+                                    <select id="status" name="status" class="form-select" required>
+                                        <option value="paid" <%= formData.status === 'paid' ? 'selected' : '' %>><%= labels.statusPaid %></option>
+                                        <option value="partially_paid" <%= formData.status === 'partially_paid' ? 'selected' : '' %>><%= labels.statusPartiallyPaid %></option>
+                                        <option value="refunded" <%= formData.status === 'refunded' ? 'selected' : '' %>><%= labels.statusRefunded %></option>
+                                        <option value="pending" <%= formData.status === 'pending' ? 'selected' : '' %>><%= labels.statusPending %></option>
+                                    </select>
+                                </div>
+
+                                <div class="form-check">
+                                    <input id="is_refund" name="is_refund" type="checkbox" value="true" class="form-check-input" <%= formData.is_refund ? 'checked' : '' %> />
+                                    <label for="is_refund" class="form-check-label"><%= labels.isRefund %></label>
+                                </div>
+
+                                <div>
+                                    <label for="notes" class="form-label fw-semibold"><%= labels.notes %></label>
+                                    <textarea id="notes" name="notes" rows="2" maxlength="500" class="form-control"><%= formData.notes %></textarea>
+                                </div>
+
+                                <div>
+                                    <label for="attachment_path" class="form-label fw-semibold"><%= labels.attachmentPath %></label>
+                                    <input id="attachment_path" name="attachment_path" type="text" maxlength="255" value="<%= formData.attachment_path %>" class="form-control" />
+                                </div>
+
+                                <div>
+                                    <label for="attachment_upload" class="form-label fw-semibold"><%= labels.attachmentUpload %></label>
+                                    <input id="attachment_upload" name="attachment_upload" type="file" class="form-control" />
                                     <div class="invalid-feedback"><%= labels.requiredField %></div>
                                 </div>
 
@@ -174,13 +239,14 @@
                                         </tr>
                                         <tr id="edit-<%= item.id %>" class="ledger-edit-row" hidden>
                                             <td colspan="5">
-                                                <form id="update-<%= item.id %>" action="/transactions/<%= item.id %>/update" method="POST" class="ledger-edit-form" data-transaction-id="<%= item.id %>" data-original-receipt="<%= item.receiptNumber %>">
+                                                <form id="update-<%= item.id %>" action="/transactions/<%= item.id %>/update" method="POST" enctype="multipart/form-data" class="ledger-edit-form" data-transaction-id="<%= item.id %>" data-original-receipt="<%= item.receiptNumber %>">
                                                     <input type="hidden" name="page" value="<%= currentPage %>" />
                                                     <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
                                                     <input type="hidden" name="fDate" value="<%= filters.date %>" />
                                                     <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
                                                     <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
                                                     <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+                                                    <input type="hidden" name="existing_attachment_path" value="<%= item.attachment_path || '' %>" />
                                                     <div class="row g-3">
                                                         <div class="col-lg-4">
                                                             <label class="form-label small fw-semibold"><%= labels.receiptNumber %></label>
@@ -192,7 +258,7 @@
                                                         </div>
                                                         <div class="col-lg-5">
                                                             <label class="form-label small fw-semibold"><%= labels.paidBy %></label>
-                                                            <input name="paidBy" type="text" maxlength="80" value="<%= item.paidBy %>" class="form-control" required />
+                                                            <input name="paidBy" type="text" maxlength="80" value="<%= item.paidBy %>" class="form-control" list="knownCustomersList" required />
                                                         </div>
                                                         <div class="col-lg-7">
                                                             <label class="form-label small fw-semibold"><%= labels.purpose %></label>
@@ -204,6 +270,50 @@
                                                                 <span class="input-group-text">₪</span>
                                                                 <input name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" value="<%= item.amount %>" class="form-control" required />
                                                             </div>
+                                                        </div>
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label small fw-semibold"><%= labels.customerId %></label>
+                                                            <input name="customer_id" type="text" maxlength="80" value="<%= item.customer_id || '' %>" class="form-control" list="knownCustomerIdsList" required />
+                                                        </div>
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label small fw-semibold"><%= labels.paymentMethod %></label>
+                                                            <select name="payment_method" class="form-select" required>
+                                                                <option value="cash" <%= (item.payment_method || 'cash') === 'cash' ? 'selected' : '' %>>Cash</option>
+                                                                <option value="credit_card" <%= item.payment_method === 'credit_card' ? 'selected' : '' %>>Credit Card</option>
+                                                                <option value="bank_transfer" <%= item.payment_method === 'bank_transfer' ? 'selected' : '' %>>Bank Transfer</option>
+                                                                <option value="cheque" <%= item.payment_method === 'cheque' ? 'selected' : '' %>>Cheque</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-lg-4" data-payment-reference-wrapper>
+                                                            <label class="form-label small fw-semibold"><%= labels.paymentReference %></label>
+                                                            <input name="payment_reference" type="text" maxlength="120" value="<%= item.payment_reference || '' %>" class="form-control" />
+                                                        </div>
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label small fw-semibold"><%= labels.status %></label>
+                                                            <select name="status" class="form-select" required>
+                                                                <option value="paid" <%= (item.status || 'paid') === 'paid' ? 'selected' : '' %>><%= labels.statusPaid %></option>
+                                                                <option value="partially_paid" <%= item.status === 'partially_paid' ? 'selected' : '' %>><%= labels.statusPartiallyPaid %></option>
+                                                                <option value="refunded" <%= item.status === 'refunded' ? 'selected' : '' %>><%= labels.statusRefunded %></option>
+                                                                <option value="pending" <%= item.status === 'pending' ? 'selected' : '' %>><%= labels.statusPending %></option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-lg-4 d-flex align-items-end">
+                                                            <div class="form-check">
+                                                                <input id="is_refund_<%= item.id %>" name="is_refund" type="checkbox" value="true" class="form-check-input" <%= item.is_refund ? 'checked' : '' %> />
+                                                                <label class="form-check-label" for="is_refund_<%= item.id %>"><%= labels.isRefund %></label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-lg-12">
+                                                            <label class="form-label small fw-semibold"><%= labels.notes %></label>
+                                                            <textarea name="notes" rows="2" maxlength="500" class="form-control"><%= item.notes || '' %></textarea>
+                                                        </div>
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label small fw-semibold"><%= labels.attachmentPath %></label>
+                                                            <input name="attachment_path" type="text" maxlength="255" value="<%= item.attachment_path || '' %>" class="form-control" />
+                                                        </div>
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label small fw-semibold"><%= labels.attachmentUpload %></label>
+                                                            <input name="attachment_upload" type="file" class="form-control" />
                                                         </div>
                                                     </div>
                                                     <div class="d-flex gap-2 justify-content-end mt-3">
@@ -369,8 +479,10 @@
                 const confirmDeleteButton = document.getElementById("confirmDeleteButton");
                 const shouldShowAnnualAlert = <%- JSON.stringify(Boolean(shouldShowAnnualAlert)) %>;
                 const receiptDirectory = <%- JSON.stringify(receiptDirectory || []) %>;
+                const customerDirectory = <%- JSON.stringify(customerDirectory || []) %>;
                 const requiredFieldMessage = <%- JSON.stringify(labels.requiredField) %>;
                 const duplicateReceiptMessage = <%- JSON.stringify(labels.duplicateReceiptNumber) %>;
+                const paymentReferenceRequiredMessage = <%- JSON.stringify(labels.paymentReferenceRequired) %>;
                 let pendingDeleteTransactionId = "";
 
                 function normalizeReceiptNumberValue (value) {
@@ -405,6 +517,105 @@
                         });
                     } catch (error) {
                         throw withFunctionError("isDuplicateReceipt", error);
+                    }
+                }
+
+                function shouldRequirePaymentReference (paymentMethod) {
+                    try {
+                        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer";
+                    } catch (error) {
+                        throw withFunctionError("shouldRequirePaymentReference", error);
+                    }
+                }
+
+                function normalizePayerName (value) {
+                    try {
+                        return String(value || "").trim().toLowerCase();
+                    } catch (error) {
+                        throw withFunctionError("normalizePayerName", error);
+                    }
+                }
+
+                function getCustomerIdByPayerName (payerName) {
+                    try {
+                        const normalized = normalizePayerName(payerName);
+                        if (!normalized) {
+                            return "";
+                        }
+
+                        const match = customerDirectory.find((entry) => {
+                            if (!entry || typeof entry !== "object") {
+                                return false;
+                            }
+
+                            return normalizePayerName(entry.paidBy) === normalized;
+                        });
+
+                        return match ? String(match.customerId || "").trim() : "";
+                    } catch (error) {
+                        throw withFunctionError("getCustomerIdByPayerName", error);
+                    }
+                }
+
+                function initializeCustomerAndPaymentFields (form) {
+                    try {
+                        if (!form) {
+                            return;
+                        }
+
+                        const paidByInput = form.querySelector('[name="paidBy"]');
+                        const customerIdInput = form.querySelector('[name="customer_id"]');
+                        const paymentMethodSelect = form.querySelector('[name="payment_method"]');
+                        const paymentReferenceWrapper = form.querySelector("[data-payment-reference-wrapper]");
+                        const paymentReferenceInput = form.querySelector('[name="payment_reference"]');
+
+                        function syncCustomerIdFromPayer () {
+                            try {
+                                if (!paidByInput || !customerIdInput) {
+                                    return;
+                                }
+
+                                const matchedCustomerId = getCustomerIdByPayerName(paidByInput.value);
+                                if (matchedCustomerId) {
+                                    customerIdInput.value = matchedCustomerId;
+                                }
+                            } catch (error) {
+                                throw withFunctionError("syncCustomerIdFromPayer", error);
+                            }
+                        }
+
+                        function updatePaymentReferenceState () {
+                            try {
+                                if (!paymentMethodSelect || !paymentReferenceInput) {
+                                    return;
+                                }
+
+                                const mustHaveReference = shouldRequirePaymentReference(paymentMethodSelect.value);
+                                paymentReferenceInput.required = mustHaveReference;
+                                if (paymentReferenceWrapper) {
+                                    paymentReferenceWrapper.classList.toggle("d-none", !mustHaveReference);
+                                }
+
+                                if (!mustHaveReference) {
+                                    paymentReferenceInput.setCustomValidity("");
+                                }
+                            } catch (error) {
+                                throw withFunctionError("updatePaymentReferenceState", error);
+                            }
+                        }
+
+                        if (paidByInput && customerIdInput) {
+                            paidByInput.addEventListener("input", safeHandler(syncCustomerIdFromPayer));
+                            paidByInput.addEventListener("change", safeHandler(syncCustomerIdFromPayer));
+                            syncCustomerIdFromPayer();
+                        }
+
+                        if (paymentMethodSelect && paymentReferenceInput) {
+                            paymentMethodSelect.addEventListener("change", safeHandler(updatePaymentReferenceState));
+                            updatePaymentReferenceState();
+                        }
+                    } catch (error) {
+                        throw withFunctionError("initializeCustomerAndPaymentFields", error);
                     }
                 }
 
@@ -660,7 +871,13 @@
                     function buildFormSnapshot (form) {
                         try {
                             return getEditableFields(form)
-                                .map((field) => `${field.name}=${field.value}`)
+                                .map((field) => {
+                                    if (field.type === "checkbox") {
+                                        return `${field.name}=${field.checked ? "1" : "0"}`;
+                                    }
+
+                                    return `${field.name}=${field.value}`;
+                                })
                                 .join("&");
                         } catch (error) {
                             throw withFunctionError("buildFormSnapshot", error);
@@ -689,6 +906,7 @@
 
                     editForms.forEach((form) => {
                         try {
+                            initializeCustomerAndPaymentFields(form);
                             form.dataset.initialSnapshot = buildFormSnapshot(form);
                             getEditableFields(form).forEach((field) => {
                                 field.addEventListener("input", safeHandler(() => {
@@ -778,6 +996,9 @@
                     }
 
                     const newReceiptInput = newTransactionForm.querySelector('input[name="receiptNumber"]');
+                    const newPaymentMethod = newTransactionForm.querySelector('[name="payment_method"]');
+                    const newPaymentReference = newTransactionForm.querySelector('[name="payment_reference"]');
+                    initializeCustomerAndPaymentFields(newTransactionForm);
                     if (newReceiptInput) {
                         newReceiptInput.addEventListener("input", safeHandler(() => {
                             const duplicate = isDuplicateReceipt(newReceiptInput.value);
@@ -804,6 +1025,14 @@
                                 }
                             }
 
+                            if (newPaymentMethod && newPaymentReference) {
+                                if (shouldRequirePaymentReference(newPaymentMethod.value) && !String(newPaymentReference.value || "").trim()) {
+                                    newPaymentReference.setCustomValidity(paymentReferenceRequiredMessage);
+                                } else {
+                                    newPaymentReference.setCustomValidity("");
+                                }
+                            }
+
                             if (!newTransactionForm.checkValidity()) {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -822,8 +1051,11 @@
                     editForms.forEach((form) => {
                         try {
                             const receiptInput = form.querySelector('input[name="receiptNumber"]');
+                            const paymentMethodInput = form.querySelector('[name="payment_method"]');
+                            const paymentReferenceInput = form.querySelector('[name="payment_reference"]');
                             const transactionId = form.getAttribute("data-transaction-id") || "";
                             const originalReceipt = form.getAttribute("data-original-receipt") || "";
+                            initializeCustomerAndPaymentFields(form);
 
                             if (receiptInput) {
                                 receiptInput.addEventListener("input", safeHandler(() => {
@@ -848,6 +1080,14 @@
                                         } else {
                                             receiptInput.setCustomValidity("");
                                             updateReceiptFeedback(receiptInput, requiredFieldMessage);
+                                        }
+                                    }
+
+                                    if (paymentMethodInput && paymentReferenceInput) {
+                                        if (shouldRequirePaymentReference(paymentMethodInput.value) && !String(paymentReferenceInput.value || "").trim()) {
+                                            paymentReferenceInput.setCustomValidity(paymentReferenceRequiredMessage);
+                                        } else {
+                                            paymentReferenceInput.setCustomValidity("");
                                         }
                                     }
 

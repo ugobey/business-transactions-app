@@ -1,5 +1,7 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs/promises");
+const multer = require("multer");
 const {
     initializeDataFiles,
     readTransactions,
@@ -15,6 +17,15 @@ const {
 const app = express();
 const port = process.env.PORT || 3000;
 const PAGE_SIZE = 50;
+const uploadDirPath = path.join(__dirname, "uploads");
+const PAYMENT_METHODS = new Set(["credit_card", "cash", "bank_transfer", "cheque"]);
+const STATUSES = new Set(["paid", "partially_paid", "refunded", "pending"]);
+
+const upload = multer({ dest: uploadDirPath });
+
+fs.mkdir(uploadDirPath, { recursive: true }).catch((error) => {
+    console.error(withFunctionError("createUploadsDirectory", error));
+});
 
 initializeDataFiles().catch((error) => {
     console.error(withFunctionError("initializeDataFiles", error));
@@ -26,6 +37,7 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use("/vendor/bootstrap", express.static(path.join(__dirname, "node_modules", "bootstrap", "dist")));
+app.use("/uploads", express.static(uploadDirPath));
 app.use(express.static(path.join(__dirname, "public")));
 
 const TRANSLATIONS = {
@@ -121,6 +133,25 @@ const TRANSLATIONS = {
         noResultsFound: "No results found",
         noResultsDescription: "No transactions match the applied filters.",
         duplicateReceiptNumber: "Receipt number already exists. Please use a unique receipt number.",
+        paymentMethod: "Payment Method",
+        paymentReference: "Payment Reference",
+        customerId: "Customer ID",
+        status: "Status",
+        statusPaid: "Paid",
+        statusPartiallyPaid: "Partially Paid",
+        statusRefunded: "Refunded",
+        statusPending: "Pending",
+        isRefund: "Is Refund",
+        notes: "Notes",
+        attachmentPath: "Attachment Path / URL",
+        attachmentUpload: "Upload Attachment",
+        paymentReferenceHelp: "Bank ref / transaction ID / check number",
+        invalidPaymentMethod: "Please select a valid payment method.",
+        invalidStatus: "Please select a valid payment status.",
+        paymentReferenceRequired: "Payment reference is required for credit card and bank transfer payments.",
+        customerIdRequired: "Customer ID is required.",
+        customerIdMismatch: "Customer ID must match the existing customer record for this payer.",
+        customerNameMismatch: "This Customer ID is already linked to a different payer.",
     },
     he: {
         appTitle: "עסקאות עסקיות של אביטל פרהנג",
@@ -214,6 +245,25 @@ const TRANSLATIONS = {
         noResultsFound: "לא נמצאו תוצאות",
         noResultsDescription: "אין עסקאות התואמות לסינונים שהוחלו.",
         duplicateReceiptNumber: "מספר הקבלה כבר קיים. נא להזין מספר קבלה ייחודי.",
+        paymentMethod: "אמצעי תשלום",
+        paymentReference: "אסמכתא לתשלום",
+        customerId: "מזהה לקוח",
+        status: "סטטוס",
+        statusPaid: "שולם",
+        statusPartiallyPaid: "שולם חלקית",
+        statusRefunded: "הוחזר",
+        statusPending: "ממתין",
+        isRefund: "האם החזר",
+        notes: "הערות",
+        attachmentPath: "נתיב / קישור לקובץ",
+        attachmentUpload: "העלאת קובץ",
+        paymentReferenceHelp: "אסמכתא בנקאית / מזהה עסקה / מספר צ'ק",
+        invalidPaymentMethod: "נא לבחור אמצעי תשלום תקין.",
+        invalidStatus: "נא לבחור סטטוס תשלום תקין.",
+        paymentReferenceRequired: "נדרש להזין אסמכתא לתשלומי כרטיס אשראי והעברה בנקאית.",
+        customerIdRequired: "נדרש מזהה לקוח.",
+        customerIdMismatch: "מזהה הלקוח חייב להתאים לרשומת הלקוח הקיימת עבור משלם זה.",
+        customerNameMismatch: "מזהה לקוח זה כבר משויך למשלם אחר.",
     },
 };
 
@@ -277,9 +327,121 @@ function normalizeTransactions(transactions) {
         return transactions.map((item) => ({
             ...item,
             receiptNumber: item.receiptNumber || "",
+            payment_method: item.payment_method || "cash",
+            payment_reference: item.payment_reference || "",
+            customer_id: item.customer_id || "",
+            status: item.status || "paid",
+            is_refund: Boolean(item.is_refund),
+            notes: item.notes || "",
+            attachment_path: item.attachment_path || "",
         }));
     } catch (error) {
         throw withFunctionError("normalizeTransactions", error);
+    }
+}
+
+function normalizePaymentMethod(value) {
+    try {
+        const normalized = String(value || "").trim().toLowerCase();
+        return PAYMENT_METHODS.has(normalized) ? normalized : "";
+    } catch (error) {
+        throw withFunctionError("normalizePaymentMethod", error);
+    }
+}
+
+function normalizeStatus(value) {
+    try {
+        const normalized = String(value || "").trim().toLowerCase();
+        return STATUSES.has(normalized) ? normalized : "";
+    } catch (error) {
+        throw withFunctionError("normalizeStatus", error);
+    }
+}
+
+function shouldRequirePaymentReference(paymentMethod) {
+    try {
+        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer";
+    } catch (error) {
+        throw withFunctionError("shouldRequirePaymentReference", error);
+    }
+}
+
+function buildCustomerMaps(transactions, excludeId = "") {
+    try {
+        const customerIdByPayer = new Map();
+        const payerByCustomerId = new Map();
+
+        transactions.forEach((item) => {
+            if (excludeId && item.id === excludeId) {
+                return;
+            }
+
+            const payerName = String(item.paidBy || "").trim();
+            const normalizedPayerName = payerName.toLowerCase();
+            const customerId = String(item.customer_id || "").trim();
+
+            if (normalizedPayerName && customerId && !customerIdByPayer.has(normalizedPayerName)) {
+                customerIdByPayer.set(normalizedPayerName, customerId);
+            }
+
+            if (customerId && normalizedPayerName && !payerByCustomerId.has(customerId)) {
+                payerByCustomerId.set(customerId, normalizedPayerName);
+            }
+        });
+
+        return {
+            customerIdByPayer,
+            payerByCustomerId,
+        };
+    } catch (error) {
+        throw withFunctionError("buildCustomerMaps", error);
+    }
+}
+
+function resolveCustomerIdForPayer({
+    transactions,
+    paidBy,
+    customerId,
+    excludeId = "",
+}) {
+    try {
+        const normalizedPayer = String(paidBy || "").trim().toLowerCase();
+        const normalizedCustomerId = String(customerId || "").trim();
+        const { customerIdByPayer, payerByCustomerId } = buildCustomerMaps(transactions, excludeId);
+
+        if (!normalizedCustomerId) {
+            return {
+                isValid: false,
+                resolvedCustomerId: "",
+                errorKey: "customerIdRequired",
+            };
+        }
+
+        const existingCustomerId = customerIdByPayer.get(normalizedPayer) || "";
+        if (existingCustomerId && existingCustomerId !== normalizedCustomerId) {
+            return {
+                isValid: false,
+                resolvedCustomerId: normalizedCustomerId,
+                errorKey: "customerIdMismatch",
+            };
+        }
+
+        const existingPayerForCustomerId = payerByCustomerId.get(normalizedCustomerId) || "";
+        if (existingPayerForCustomerId && existingPayerForCustomerId !== normalizedPayer) {
+            return {
+                isValid: false,
+                resolvedCustomerId: normalizedCustomerId,
+                errorKey: "customerNameMismatch",
+            };
+        }
+
+        return {
+            isValid: true,
+            resolvedCustomerId: existingCustomerId || normalizedCustomerId,
+            errorKey: "",
+        };
+    } catch (error) {
+        throw withFunctionError("resolveCustomerIdForPayer", error);
     }
 }
 
@@ -785,6 +947,13 @@ async function renderIndex(res, options = {}) {
                 date: "",
                 purpose: "",
                 paidBy: "",
+                payment_method: "cash",
+                payment_reference: "",
+                customer_id: "",
+                status: "paid",
+                is_refund: false,
+                notes: "",
+                attachment_path: "",
             },
             error: options.error || null,
             successMessage: options.successMessage || null,
@@ -794,6 +963,12 @@ async function renderIndex(res, options = {}) {
                 id: item.id,
                 receiptNumber: item.receiptNumber || "",
             })),
+            customerDirectory: allTransactions
+                .map((item) => ({
+                    paidBy: String(item.paidBy || "").trim(),
+                    customerId: String(item.customer_id || "").trim(),
+                }))
+                .filter((entry) => entry.paidBy && entry.customerId),
             ...annualThresholdStatus,
         });
     } catch (error) {
@@ -852,7 +1027,7 @@ app.get("/stats", async (req, res, next) => {
     }
 });
 
-app.post("/transactions", async (req, res, next) => {
+app.post("/transactions", upload.single("attachment_upload"), async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
         const labels = TRANSLATIONS[lang];
@@ -863,17 +1038,112 @@ app.post("/transactions", async (req, res, next) => {
             date: req.body.date,
             purpose: req.body.purpose,
             paidBy: req.body.paidBy,
+            payment_method: req.body.payment_method,
+            payment_reference: req.body.payment_reference,
+            customer_id: req.body.customer_id,
+            status: req.body.status,
+            is_refund: Boolean(req.body.is_refund),
+            notes: req.body.notes,
+            attachment_path: req.body.attachment_path,
         };
 
         const amount = Number(formData.amount);
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const paymentMethod = normalizePaymentMethod(formData.payment_method);
+        const paymentReference = String(formData.payment_reference || "").trim();
+        const status = normalizeStatus(formData.status);
+        const paidBy = String(formData.paidBy || "").trim();
+        const customerId = String(formData.customer_id || "").trim();
+        const notes = String(formData.notes || "").trim();
+        const attachmentPathInput = String(formData.attachment_path || "").trim();
+        const uploadedAttachmentPath = req.file ? `/uploads/${req.file.filename}` : "";
+        const attachmentPath = uploadedAttachmentPath || attachmentPathInput;
+        const customerResolution = resolveCustomerIdForPayer({
+            transactions: allTransactions,
+            paidBy,
+            customerId,
+        });
 
         if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !formData.paidBy?.trim()) {
             return await renderIndex(res, {
                 lang,
                 statusCode: 400,
-                formData,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod || "cash",
+                    payment_reference: paymentReference,
+                    customer_id: customerId,
+                    status: status || "paid",
+                    is_refund: Boolean(formData.is_refund),
+                    notes,
+                    attachment_path: attachmentPath,
+                },
                 error: labels.validationError,
+            });
+        }
+
+        if (!paymentMethod) {
+            return await renderIndex(res, {
+                lang,
+                statusCode: 400,
+                formData: {
+                    ...formData,
+                    payment_reference: paymentReference,
+                    customer_id: customerId,
+                    status: status || "paid",
+                    notes,
+                    attachment_path: attachmentPath,
+                },
+                error: labels.invalidPaymentMethod,
+            });
+        }
+
+        if (!status) {
+            return await renderIndex(res, {
+                lang,
+                statusCode: 400,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod,
+                    payment_reference: paymentReference,
+                    customer_id: customerId,
+                    notes,
+                    attachment_path: attachmentPath,
+                },
+                error: labels.invalidStatus,
+            });
+        }
+
+        if (shouldRequirePaymentReference(paymentMethod) && !paymentReference) {
+            return await renderIndex(res, {
+                lang,
+                statusCode: 400,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod,
+                    status,
+                    customer_id: customerId,
+                    notes,
+                    attachment_path: attachmentPath,
+                },
+                error: labels.paymentReferenceRequired,
+            });
+        }
+
+        if (!customerResolution.isValid) {
+            return await renderIndex(res, {
+                lang,
+                statusCode: 400,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod,
+                    payment_reference: paymentReference,
+                    status,
+                    customer_id: customerId,
+                    notes,
+                    attachment_path: attachmentPath,
+                },
+                error: labels[customerResolution.errorKey] || labels.customerIdRequired,
             });
         }
 
@@ -881,7 +1151,15 @@ app.post("/transactions", async (req, res, next) => {
             return await renderIndex(res, {
                 lang,
                 statusCode: 400,
-                formData,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod,
+                    payment_reference: paymentReference,
+                    status,
+                    customer_id: customerResolution.resolvedCustomerId,
+                    notes,
+                    attachment_path: attachmentPath,
+                },
                 error: labels.duplicateReceiptNumber,
             });
         }
@@ -891,7 +1169,14 @@ app.post("/transactions", async (req, res, next) => {
             amount,
             date: formData.date,
             purpose: formData.purpose.trim(),
-            paidBy: formData.paidBy.trim(),
+            paidBy,
+            payment_method: paymentMethod,
+            payment_reference: paymentReference,
+            customer_id: customerResolution.resolvedCustomerId,
+            status,
+            is_refund: Boolean(formData.is_refund),
+            notes,
+            attachment_path: attachmentPath,
         });
 
         return res.redirect("/?success=1");
@@ -936,7 +1221,7 @@ app.post("/settings", async (req, res, next) => {
     }
 });
 
-app.post("/transactions/:id/update", async (req, res, next) => {
+app.post("/transactions/:id/update", upload.single("attachment_upload"), async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
         const labels = TRANSLATIONS[lang];
@@ -949,10 +1234,34 @@ app.post("/transactions/:id/update", async (req, res, next) => {
             date: req.body.date,
             purpose: req.body.purpose,
             paidBy: req.body.paidBy,
+            payment_method: req.body.payment_method,
+            payment_reference: req.body.payment_reference,
+            customer_id: req.body.customer_id,
+            status: req.body.status,
+            is_refund: Boolean(req.body.is_refund),
+            notes: req.body.notes,
+            attachment_path: req.body.attachment_path,
+            existing_attachment_path: req.body.existing_attachment_path,
         };
 
         const amount = Number(formData.amount);
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const paymentMethod = normalizePaymentMethod(formData.payment_method);
+        const paymentReference = String(formData.payment_reference || "").trim();
+        const status = normalizeStatus(formData.status);
+        const paidBy = String(formData.paidBy || "").trim();
+        const customerId = String(formData.customer_id || "").trim();
+        const notes = String(formData.notes || "").trim();
+        const uploadedAttachmentPath = req.file ? `/uploads/${req.file.filename}` : "";
+        const attachmentPathInput = String(formData.attachment_path || "").trim();
+        const existingAttachmentPath = String(formData.existing_attachment_path || "").trim();
+        const attachmentPath = uploadedAttachmentPath || attachmentPathInput || existingAttachmentPath;
+        const customerResolution = resolveCustomerIdForPayer({
+            transactions: allTransactions,
+            paidBy,
+            customerId,
+            excludeId: req.params.id,
+        });
 
         if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !formData.paidBy?.trim()) {
             return await renderIndex(res, {
@@ -961,6 +1270,46 @@ app.post("/transactions/:id/update", async (req, res, next) => {
                 filters,
                 statusCode: 400,
                 error: labels.validationError,
+            });
+        }
+
+        if (!paymentMethod) {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels.invalidPaymentMethod,
+            });
+        }
+
+        if (!status) {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels.invalidStatus,
+            });
+        }
+
+        if (shouldRequirePaymentReference(paymentMethod) && !paymentReference) {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels.paymentReferenceRequired,
+            });
+        }
+
+        if (!customerResolution.isValid) {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels[customerResolution.errorKey] || labels.customerIdRequired,
             });
         }
 
@@ -979,7 +1328,14 @@ app.post("/transactions/:id/update", async (req, res, next) => {
             amount,
             date: formData.date,
             purpose: formData.purpose.trim(),
-            paidBy: formData.paidBy.trim(),
+            paidBy,
+            payment_method: paymentMethod,
+            payment_reference: paymentReference,
+            customer_id: customerResolution.resolvedCustomerId,
+            status,
+            is_refund: Boolean(formData.is_refund),
+            notes,
+            attachment_path: attachmentPath,
         });
 
         if (!updated) {
@@ -1128,6 +1484,13 @@ app.use(async (error, req, res, next) => {
                 date: req.body?.date || "",
                 purpose: req.body?.purpose || "",
                 paidBy: req.body?.paidBy || "",
+                payment_method: req.body?.payment_method || "cash",
+                payment_reference: req.body?.payment_reference || "",
+                customer_id: req.body?.customer_id || "",
+                status: req.body?.status || "paid",
+                is_refund: Boolean(req.body?.is_refund),
+                notes: req.body?.notes || "",
+                attachment_path: req.body?.attachment_path || (req.file ? `/uploads/${req.file.filename}` : ""),
             }
             : undefined;
 

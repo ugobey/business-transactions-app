@@ -305,3 +305,66 @@ html[dir="rtl"] .language-switcher > .btn + .btn {
         padding: 1rem;
     }
 }
+
+.backup-setup-markdown {
+    color: var(--ia-text);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.backup-setup-markdown h1,
+.backup-setup-markdown h2,
+.backup-setup-markdown h3,
+.backup-setup-markdown h4 {
+    margin-top: 1.1rem;
+    margin-bottom: 0.6rem;
+    color: #0f2c72;
+    font-weight: 700;
+}
+
+.backup-setup-markdown h1,
+.backup-setup-markdown h2 {
+    border-bottom: 1px solid #e0e8f6;
+    padding-bottom: 0.35rem;
+}
+
+.backup-setup-markdown p {
+    margin-bottom: 0.75rem;
+}
+
+.backup-setup-markdown ul,
+.backup-setup-markdown ol {
+    margin-bottom: 0.9rem;
+    padding-left: 1.15rem;
+}
+
+.backup-setup-markdown li {
+    margin-bottom: 0.35rem;
+}
+
+.backup-setup-markdown code {
+    font-size: 0.86em;
+    background: #eef3ff;
+    color: #1a3e9f;
+    border-radius: 0.3rem;
+    padding: 0.1rem 0.35rem;
+}
+
+.backup-setup-markdown pre {
+    background: #f4f7ff;
+    border: 1px solid #d6e0f7;
+    border-radius: 0.6rem;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+}
+
+.backup-setup-markdown pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.backup-setup-markdown a {
+    color: var(--ia-brand);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}

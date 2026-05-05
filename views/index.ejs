@@ -536,7 +536,7 @@
                         <div id="restoreInfoSection" class="d-none mb-3">
                             <div class="small fw-semibold mb-2">Select a backup to restore:</div>
                             <div id="restoreBackupList" class="vstack gap-1"></div>
-                            <button type="button" class="btn btn-sm btn-danger mt-2 d-none" id="restoreSelectedButton"><%= labels.restoreFromDrive || 'Restore from Drive' %></button>
+                            <button type="button" class="btn btn-sm btn-danger mt-2 d-none" id="restoreSelectedButton"><%= labels.restoreFromDrive || 'Restore' %></button>
                         </div>
                         <div id="restoreConfirmSection" class="d-none alert alert-warning">
                             <p class="mb-1 small fw-semibold">Restore from: <span id="restoreSelectedName" class="fw-normal"></span></p>
@@ -550,7 +550,7 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-sm btn-link text-danger me-auto d-none" id="backupDisconnectButton">Disconnect</button>
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
-                        <button type="button" class="btn btn-outline-primary d-none" id="restoreFromDriveButton"><%= labels.restoreFromDrive || 'Restore from Drive' %></button>
+                        <button type="button" class="btn btn-outline-primary d-none" id="restoreFromDriveButton"><%= labels.restoreFromDrive || 'Restore' %></button>
                         <button type="button" class="btn btn-primary d-none" id="backupNowButton">Backup Now</button>
                     </div>
                 </div>
@@ -582,7 +582,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
                     </div>
                     <div class="modal-body">
-                        <pre class="mb-0 small" style="white-space: pre-wrap;"><%= backupSetupStepsContent %></pre>
+                        <article class="backup-setup-markdown"><%- backupSetupStepsHtml %></article>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>

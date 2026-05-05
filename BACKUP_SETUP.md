@@ -36,16 +36,15 @@ Your Business Transactions app supports backup to your personal Google Drive usi
 
 ### Step 4: Configure Your App
 
-1. Copy the downloaded JSON file to your project root and rename it to `credentials.json`
-2. Restart your app (`npm start`)
+1. Open the downloaded JSON file and then copy the contents and return to the Business Transactions app
+2. Paste it into the text area in the modal popup and press **Save Credentials**
 
 ### Step 5: Authorize Google Drive
 
-1. Open your app and click the **Backup** button in the navbar
-2. Click **Connect Google Drive** — a new tab opens
-3. Sign in with your Google account and click **Allow**
-4. The tab will close automatically and the modal will refresh to show "✓ Google Drive connected"
-5. Click **Backup Now**
+1. Click **Connect Google Drive** — a new window opens
+2. Sign in with your Google account and click **Allow**
+3. The window will close automatically and the modal will refresh to show "✓ Google Drive connected"
+4. Click **Backup Now** or **Restore**
 
 Backups are saved in a folder called **BusinessTransactionsBackup** in your personal Google Drive.
 

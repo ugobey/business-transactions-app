@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs/promises");
 const multer = require("multer");
+const { marked } = require("marked");
 const {
     initializeDataFiles,
     readTransactions,
@@ -315,7 +316,7 @@ const TRANSLATIONS = {
         backup: "Backup",
         backupRestore: "Backup / Restore",
         restore: "Restore",
-        restoreFromDrive: "Restore from Drive",
+        restoreFromDrive: "Restore",
         restoreLatestBackup: "Latest backup on Drive:",
         restoreNoBackups: "No backups found on Google Drive.",
         restoreConfirmTitle: "Restore from Backup",
@@ -1336,19 +1337,21 @@ function getAuditCustomerId(entry, entriesById = new Map()) {
     }
 }
 
-async function readBackupSetupStepsContent() {
+async function readBackupSetupStepsHtml() {
     try {
         const backupSetupPath = path.join(__dirname, "BACKUP_SETUP.md");
         const markdown = await fs.readFile(backupSetupPath, "utf8");
         const sectionMatch = markdown.match(/## Setup Steps\s*([\s\S]*?)(?:\n##\s|$)/);
+        const fallbackMarkdown = "Setup steps are currently unavailable.";
+        const setupStepsMarkdown = sectionMatch ? sectionMatch[1].trim() : fallbackMarkdown;
 
-        if (!sectionMatch) {
-            return "Setup steps are currently unavailable.";
-        }
-
-        return sectionMatch[1].trim();
+        return marked.parse(setupStepsMarkdown, {
+            gfm: true,
+            breaks: true,
+            headerIds: true,
+        });
     } catch {
-        return "Setup steps are currently unavailable.";
+        return "<p>Setup steps are currently unavailable.</p>";
     }
 }
 
@@ -1372,7 +1375,7 @@ async function renderIndex(res, options = {}) {
         const currentPage = Math.min(requestedPage, totalPages);
         const startIndex = (currentPage - 1) * PAGE_SIZE;
         const pageTransactions = filteredTransactions.slice(startIndex, startIndex + PAGE_SIZE);
-        const backupSetupStepsContent = await readBackupSetupStepsContent();
+        const backupSetupStepsHtml = await readBackupSetupStepsHtml();
 
         return res.status(options.statusCode || 200).render("index", {
             lang,
@@ -1430,7 +1433,7 @@ async function renderIndex(res, options = {}) {
                     .filter(Boolean)
                     .map((purpose) => [purpose.toLowerCase(), purpose]),
             ).values()),
-            backupSetupStepsContent,
+            backupSetupStepsHtml,
             ...annualThresholdStatus,
         });
     } catch (error) {

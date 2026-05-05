@@ -486,6 +486,20 @@
                                     <span class="input-group-text">%</span>
                                 </div>
                             </div>
+
+                            <hr class="my-3" />
+
+                            <div>
+                                <label for="maxBackupsToKeep" class="form-label fw-semibold">Max Backups to Keep</label>
+                                <input id="maxBackupsToKeep" name="maxBackupsToKeep" type="number" min="1" step="1" class="form-control" value="<%= settings.maxBackupsToKeep || 10 %>" required />
+                                <div class="form-text">Maximum number of backups to retain on Google Drive. Older backups will be deleted.</div>
+                            </div>
+
+                            <div>
+                                <label for="maxBackupsToDisplay" class="form-label fw-semibold">Max Backups to Display</label>
+                                <input id="maxBackupsToDisplay" name="maxBackupsToDisplay" type="number" min="1" step="1" class="form-control" value="<%= settings.maxBackupsToDisplay || 10 %>" required />
+                                <div class="form-text">Maximum number of backups to show in the restore list.</div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>

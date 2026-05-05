@@ -1634,11 +1634,17 @@ app.post("/settings", async (req, res, next) => {
         const annualAlertPercent = Number(req.body.annualAlertPercent);
         const appBrand = String(req.body.appBrand || "").trim();
         const receiptPrefix = String(req.body.receiptPrefix || "").trim();
+        const maxBackupsToKeep = Number(req.body.maxBackupsToKeep);
+        const maxBackupsToDisplay = Number(req.body.maxBackupsToDisplay);
         const isValid = Number.isFinite(annualTotalThreshold)
             && annualTotalThreshold > 0
             && Number.isFinite(annualAlertPercent)
             && annualAlertPercent > 0
-            && annualAlertPercent <= 100;
+            && annualAlertPercent <= 100
+            && Number.isFinite(maxBackupsToKeep)
+            && maxBackupsToKeep > 0
+            && Number.isFinite(maxBackupsToDisplay)
+            && maxBackupsToDisplay > 0;
 
         if (!isValid) {
             return await renderIndex(res, {
@@ -1655,6 +1661,8 @@ app.post("/settings", async (req, res, next) => {
             annualAlertPercent,
             appBrand,
             receiptPrefix,
+            maxBackupsToKeep,
+            maxBackupsToDisplay,
         });
 
         return res.redirect(buildIndexPath({ success: 5, page, filters }));
@@ -1785,6 +1793,7 @@ app.post("/admin/backup/start", async (req, res, next) => {
             return res.status(401).json({ success: false, error: "not_authorized" });
         }
 
+        const settings = await readAppSettings();
         const job = createBackupJob();
 
         void (async () => {
@@ -1807,6 +1816,7 @@ app.post("/admin/backup/start", async (req, res, next) => {
                         currentJob.percent = Math.max(0, Math.min(100, Number(progress.percent || currentJob.percent)));
                         currentJob.message = String(progress.message || currentJob.message);
                     },
+                    settings.maxBackupsToKeep || 10,
                 );
 
                 const currentJob = backupJobs.get(job.id);
@@ -1857,7 +1867,8 @@ app.get("/admin/restore/backups", async (req, res, next) => {
         if (!authorized) {
             return res.status(401).json({ success: false, error: "not_authorized" });
         }
-        const files = await listBackupFiles();
+        const settings = await readAppSettings();
+        const files = await listBackupFiles(settings.maxBackupsToDisplay || 10);
         return res.json({ success: true, files });
     } catch (error) {
         return next(withFunctionError("app.get /admin/restore/backups", error));
@@ -1874,6 +1885,7 @@ app.post("/admin/restore/start", async (req, res, next) => {
         if (!authorized) {
             return res.status(401).json({ success: false, error: "not_authorized" });
         }
+        const settings = await readAppSettings();
         const job = createBackupJob();
         const selectedFileId = String(req.body.fileId || "").trim();
         void (async () => {
@@ -1893,6 +1905,7 @@ app.post("/admin/restore/start", async (req, res, next) => {
                         currentJob.message = String(progress.message || currentJob.message);
                     },
                     selectedFileId,
+                    settings.maxBackupsToDisplay || 10,
                 );
                 const currentJob = backupJobs.get(job.id);
                 if (currentJob) {

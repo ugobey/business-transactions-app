@@ -1429,6 +1429,9 @@
                                         if (job.status === "completed") {
                                             backupStatus.innerHTML = `<div class="alert alert-success mb-0"><strong>✓ Success!</strong> Backup completed successfully.</div>`;
                                             shouldHideBackupNowButton = true;
+                                            if (restoreFromDriveButton) {
+                                                restoreFromDriveButton.classList.add("d-none");
+                                            }
                                             if (job.result && job.result.files) {
                                                 const filesList = job.result.files.map((f) => f.name).join(", ");
                                                 const cleanupStatus = job.result.zipDeleted

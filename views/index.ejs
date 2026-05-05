@@ -16,7 +16,7 @@
         <header class="navbar navbar-expand-lg app-navbar py-3">
             <div class="container-xxl">
                 <div>
-                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= labels.appTitle %></span>
+                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= settings.appBrand || labels.appTitle %></span>
                     <p class="text-white-50 mb-0 small"><%= labels.subtitle %></p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <% if (hasAnyTransactions) { %>
@@ -403,6 +403,11 @@
                             <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
                             <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
                             <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+
+                            <div>
+                                <label for="appBrand" class="form-label fw-semibold"><%= labels.appBrand %></label>
+                                <input id="appBrand" name="appBrand" type="text" maxlength="80" class="form-control" value="<%= settings.appBrand || 'Business Transactions' %>" placeholder="Business Transactions" />
+                            </div>
 
                             <div>
                                 <label for="annualTotalThreshold" class="form-label fw-semibold"><%= labels.annualThreshold %></label>
@@ -928,6 +933,11 @@
                         try {
                             const target = document.getElementById(editorId);
                             if (!target) {
+                                return;
+                            }
+
+                            if (!target.hidden) {
+                                target.hidden = true;
                                 return;
                             }
 

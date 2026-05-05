@@ -96,6 +96,14 @@ const TRANSLATIONS = {
         annualTotalCurrentYear: "Current Year Total",
         recent30DaysRevenue: "Revenue (Last 30 Days)",
         monthlyBreakdown: "Monthly Breakdown",
+        paymentTypeBreakdown: "Payment Type Breakdown",
+        paymentType: "Payment Type",
+        paymentTypeCash: "Cash",
+        paymentTypeCreditCard: "Credit Card",
+        paymentTypeBankTransfer: "Bank Transfer",
+        paymentTypeCheque: "Cheque",
+        refundTransactionsStat: "Refund Transactions",
+        totalRefunded: "Total Refunded",
         month: "Month",
         transactionCount: "Transaction Count",
         totalAmount: "Total Amount",
@@ -105,6 +113,7 @@ const TRANSLATIONS = {
         annualThreshold: "Annual Total Threshold",
         alertPercentThreshold: "Alert Percent Threshold",
         saveSettings: "Save Settings",
+        appBrand: "Navbar Brand",
         successSettingsSaved: "Settings saved successfully.",
         invalidSettings: "Please provide a valid annual threshold and an alert percent between 1 and 100.",
         annualAlertTitle: "Annual Threshold Alert",
@@ -216,6 +225,14 @@ const TRANSLATIONS = {
         annualTotalCurrentYear: "סך הכל לשנה הנוכחית",
         recent30DaysRevenue: "הכנסות ב-30 הימים האחרונים",
         monthlyBreakdown: "פילוח חודשי",
+        paymentTypeBreakdown: "פילוח לפי אמצעי תשלום",
+        paymentType: "אמצעי תשלום",
+        paymentTypeCash: "מזומן",
+        paymentTypeCreditCard: "כרטיס אשראי",
+        paymentTypeBankTransfer: "העברה בנקאית",
+        paymentTypeCheque: "צ'ק",
+        refundTransactionsStat: "עסקאות החזר",
+        totalRefunded: "סך הוחזר",
         month: "חודש",
         transactionCount: "כמות עסקאות",
         totalAmount: "סכום כולל",
@@ -225,6 +242,7 @@ const TRANSLATIONS = {
         annualThreshold: "סף שנתי כולל",
         alertPercentThreshold: "אחוז סף התראה",
         saveSettings: "שמור הגדרות",
+        appBrand: "כותרת בסרגל הניווט",
         successSettingsSaved: "ההגדרות נשמרו בהצלחה.",
         invalidSettings: "נא להזין סף שנתי תקין ואחוז התראה בין 1 ל-100.",
         annualAlertTitle: "התראת סף שנתי",
@@ -856,16 +874,39 @@ function calculateStatistics(transactions, lang, labels) {
         const payerTotals = new Map();
         const purposeTotals = new Map();
         const monthlyTotals = new Map();
+        const paymentMethodTotals = new Map([
+            ["cash", { count: 0, total: 0 }],
+            ["credit_card", { count: 0, total: 0 }],
+            ["bank_transfer", { count: 0, total: 0 }],
+            ["cheque", { count: 0, total: 0 }],
+        ]);
         const currentYear = String(new Date().getFullYear());
         const last30DaysStart = new Date();
         last30DaysStart.setDate(last30DaysStart.getDate() - 30);
         let recent30DaysRevenue = 0;
         let annualCurrentYearTotal = 0;
+        let refundCount = 0;
+        let totalRefundedAmount = 0;
 
         transactions.forEach((item) => {
             const amount = getSignedTransactionAmount(item);
             if (!Number.isFinite(amount)) {
                 return;
+            }
+
+            const isRefund = String(item.status || "").toLowerCase() === "refunded" || Boolean(item.is_refund);
+            if (isRefund) {
+                refundCount += 1;
+                totalRefundedAmount += Math.abs(amount);
+            }
+
+            const paymentMethod = String(item.payment_method || "cash").trim().toLowerCase();
+            if (paymentMethodTotals.has(paymentMethod)) {
+                const existingMethodTotals = paymentMethodTotals.get(paymentMethod) || { count: 0, total: 0 };
+                paymentMethodTotals.set(paymentMethod, {
+                    count: existingMethodTotals.count + 1,
+                    total: existingMethodTotals.total + amount,
+                });
             }
 
             const payer = String(item.paidBy || "").trim() || labels.unknownLabel;
@@ -917,12 +958,31 @@ function calculateStatistics(transactions, lang, labels) {
                 };
             });
 
+        const paymentMethodLabelByKey = {
+            cash: labels.paymentTypeCash,
+            credit_card: labels.paymentTypeCreditCard,
+            bank_transfer: labels.paymentTypeBankTransfer,
+            cheque: labels.paymentTypeCheque,
+        };
+
+        const paymentTypeBreakdown = [...paymentMethodTotals.entries()]
+            .map(([methodKey, value]) => ({
+                methodKey,
+                methodLabel: paymentMethodLabelByKey[methodKey] || methodKey,
+                count: value.count,
+                total: value.total,
+            }))
+            .filter((row) => row.count > 0)
+            .sort((a, b) => b.total - a.total);
+
         return {
             totalTransactions,
             totalRevenue,
             averageAmount,
             medianAmount,
             largestAmount,
+            refundCount,
+            totalRefundedAmount,
             uniquePayers,
             topPayerName: topPayer[0],
             topPayerAmount: topPayer[1],
@@ -931,6 +991,7 @@ function calculateStatistics(transactions, lang, labels) {
             annualCurrentYearTotal,
             recent30DaysRevenue,
             monthOverMonthChangePercent,
+            paymentTypeBreakdown,
             monthlyBreakdown,
         };
     } catch (error) {
@@ -1119,12 +1180,14 @@ app.get("/stats", async (req, res, next) => {
         const lang = resolveLanguage(req);
         const labels = TRANSLATIONS[lang];
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const settings = await readAppSettings();
         const stats = calculateStatistics(allTransactions, lang, labels);
 
         return res.status(200).render("stats", {
             lang,
             isRtl: lang === "he",
             labels,
+            settings,
             stats,
             formatCurrency: (amount) => formatCurrency(amount, lang),
         });
@@ -1268,6 +1331,7 @@ app.post("/settings", async (req, res, next) => {
 
         const annualTotalThreshold = Number(req.body.annualTotalThreshold);
         const annualAlertPercent = Number(req.body.annualAlertPercent);
+        const appBrand = String(req.body.appBrand || "").trim();
         const isValid = Number.isFinite(annualTotalThreshold)
             && annualTotalThreshold > 0
             && Number.isFinite(annualAlertPercent)
@@ -1287,6 +1351,7 @@ app.post("/settings", async (req, res, next) => {
         await updateAppSettings({
             annualTotalThreshold,
             annualAlertPercent,
+            appBrand,
         });
 
         return res.redirect(buildIndexPath({ success: 5, page, filters }));
@@ -1532,6 +1597,7 @@ app.get("/admin/audit", async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
         const labels = TRANSLATIONS[lang];
+        const settings = await readAppSettings();
         const successCode = req.query.success;
         const errorCode = String(req.query.error || "").trim();
         const successMessage = successCode === "1"
@@ -1561,6 +1627,7 @@ app.get("/admin/audit", async (req, res, next) => {
             lang,
             isRtl: lang === "he",
             labels,
+            settings,
             entries: entriesWithReceipt,
             successMessage,
             errorMessage,

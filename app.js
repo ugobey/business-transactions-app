@@ -53,6 +53,43 @@ const MIME_EXTENSION_MAP = {
     "application/pdf": ".pdf",
 };
 
+async function clearUploadDirectoryContents(directoryPath = uploadDirPath) {
+    try {
+        const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+
+        await Promise.all(entries.map(async (entry) => {
+            const entryPath = path.join(directoryPath, entry.name);
+
+            if (entry.isDirectory()) {
+                await fs.rm(entryPath, { recursive: true, force: true });
+                return;
+            }
+
+            await fs.unlink(entryPath);
+        }));
+    } catch (error) {
+        if (error && error.code === "ENOENT") {
+            return;
+        }
+
+        throw withFunctionError("clearUploadDirectoryContents", error);
+    }
+}
+
+async function clearUploadsWhenNoTransactionsExist() {
+    try {
+        const transactions = await readTransactions();
+        if (transactions.length > 0) {
+            return false;
+        }
+
+        await clearUploadDirectoryContents(uploadDirPath);
+        return true;
+    } catch (error) {
+        throw withFunctionError("clearUploadsWhenNoTransactionsExist", error);
+    }
+}
+
 function resolveUploadExtension(file = {}) {
     try {
         const originalExtension = String(path.extname(String(file.originalname || "")) || "").toLowerCase();
@@ -117,9 +154,11 @@ fs.mkdir(uploadDirPath, { recursive: true }).catch((error) => {
     console.error(withFunctionError("createUploadsDirectory", error));
 });
 
-initializeDataFiles().catch((error) => {
-    console.error(withFunctionError("initializeDataFiles", error));
-});
+initializeDataFiles()
+    .then(() => clearUploadsWhenNoTransactionsExist())
+    .catch((error) => {
+        console.error(withFunctionError("initializeUploadsCleanup", error));
+    });
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -1792,6 +1831,15 @@ app.get("/admin/backup/progress/:jobId", (req, res) => {
     return res.json({ success: true, job });
 });
 
+app.post("/admin/uploads/cleanup-if-empty", async (req, res, next) => {
+    try {
+        const cleaned = await clearUploadsWhenNoTransactionsExist();
+        return res.json({ success: true, cleaned });
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/uploads/cleanup-if-empty", error));
+    }
+});
+
 app.post("/transactions/:id/update", upload.single("attachment_upload"), async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
@@ -1941,6 +1989,8 @@ app.post("/transactions/:id/delete", async (req, res, next) => {
                 error: labels.deleteNotFound,
             });
         }
+
+        await clearUploadsWhenNoTransactionsExist();
 
         return res.redirect(buildIndexPath({
             success: 3,

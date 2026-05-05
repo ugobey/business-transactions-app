@@ -1059,6 +1059,15 @@
                 });
 
                 safeRun(() => {
+                    fetch("/admin/uploads/cleanup-if-empty", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                    }).catch(() => {
+                        // Ignore cleanup request failures to avoid interrupting the page UX.
+                    });
+                });
+
+                safeRun(() => {
                     function isSupportedLanguage (value) {
                         try {
                             return value === "en" || value === "he";

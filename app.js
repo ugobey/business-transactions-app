@@ -167,6 +167,7 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use("/vendor/bootstrap", express.static(path.join(__dirname, "node_modules", "bootstrap", "dist")));
+app.use("/vendor/flatpickr", express.static(path.join(__dirname, "node_modules", "flatpickr", "dist")));
 app.use("/uploads", express.static(uploadDirPath));
 app.use(express.static(path.join(__dirname, "public")));
 

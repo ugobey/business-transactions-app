@@ -1586,6 +1586,31 @@ function getCredentialsPath() {
     return process.env.GOOGLE_CREDENTIALS_PATH || null;
 }
 
+const backupJobs = new Map();
+const BACKUP_JOB_TTL_MS = 10 * 60 * 1000;
+
+function createBackupJob() {
+    const jobId = `backup-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    const job = {
+        id: jobId,
+        status: "running",
+        stage: "starting",
+        percent: 0,
+        message: "Starting backup...",
+        createdAt: Date.now(),
+        result: null,
+        error: null,
+    };
+    backupJobs.set(jobId, job);
+    return job;
+}
+
+function cleanupBackupJobLater(jobId) {
+    setTimeout(() => {
+        backupJobs.delete(jobId);
+    }, BACKUP_JOB_TTL_MS);
+}
+
 app.get("/admin/backup/status", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
@@ -1663,6 +1688,80 @@ app.post("/admin/backup", async (req, res, next) => {
     } catch (error) {
         return next(withFunctionError("app.post /admin/backup", error));
     }
+});
+
+app.post("/admin/backup/start", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+        }
+
+        const authorized = await initializeAuth(credentialsPath);
+        if (!authorized) {
+            return res.status(401).json({ success: false, error: "not_authorized" });
+        }
+
+        const job = createBackupJob();
+
+        void (async () => {
+            try {
+                const dataFilePath = path.join(__dirname, "data", "transactions.json");
+                const auditFilePath = path.join(__dirname, "data", "audit-trail.json");
+                const uploadsPath = path.join(__dirname, "uploads");
+
+                const backupResult = await backupAppData(
+                    dataFilePath,
+                    auditFilePath,
+                    uploadsPath,
+                    (progress) => {
+                        const currentJob = backupJobs.get(job.id);
+                        if (!currentJob) {
+                            return;
+                        }
+
+                        currentJob.stage = String(progress.stage || currentJob.stage);
+                        currentJob.percent = Math.max(0, Math.min(100, Number(progress.percent || currentJob.percent)));
+                        currentJob.message = String(progress.message || currentJob.message);
+                    },
+                );
+
+                const currentJob = backupJobs.get(job.id);
+                if (currentJob) {
+                    currentJob.status = "completed";
+                    currentJob.stage = "completed";
+                    currentJob.percent = 100;
+                    currentJob.message = "Backup completed successfully.";
+                    currentJob.result = backupResult;
+                }
+            } catch (error) {
+                const currentJob = backupJobs.get(job.id);
+                if (currentJob) {
+                    currentJob.status = "failed";
+                    currentJob.stage = "failed";
+                    currentJob.message = "Backup failed.";
+                    currentJob.error = error.message;
+                }
+            } finally {
+                cleanupBackupJobLater(job.id);
+            }
+        })();
+
+        return res.json({ success: true, jobId: job.id });
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/backup/start", error));
+    }
+});
+
+app.get("/admin/backup/progress/:jobId", (req, res) => {
+    const jobId = String(req.params.jobId || "").trim();
+    const job = backupJobs.get(jobId);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: "job_not_found" });
+    }
+
+    return res.json({ success: true, job });
 });
 
 app.post("/transactions/:id/update", upload.single("attachment_upload"), async (req, res, next) => {

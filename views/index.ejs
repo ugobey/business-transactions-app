@@ -1261,21 +1261,67 @@
                     if (backupNowButton) {
                         backupNowButton.addEventListener("click", safeHandler(async () => {
                             try {
-                                backupStatus.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading...</span></div>Backing up...';
+                                const renderBackupProgress = (job) => {
+                                    const safePercent = Math.max(0, Math.min(100, Number(job.percent || 0)));
+                                    const message = String(job.message || "Working...");
+                                    const stageLabel = String(job.stage || "running").replace(/_/g, " ");
+                                    backupStatus.innerHTML = `
+                                        <div class="mb-2"><strong>${stageLabel}</strong>: ${message}</div>
+                                        <div class="progress" role="progressbar" aria-valuenow="${safePercent}" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: ${safePercent}%">${safePercent}%</div>
+                                        </div>
+                                    `;
+                                };
+
+                                const wait = (ms) => new Promise((resolve) => {
+                                    setTimeout(resolve, ms);
+                                });
+
+                                backupStatus.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading...</span></div>Starting backup...';
                                 backupResults.innerHTML = "";
                                 backupNowButton.disabled = true;
 
-                                const response = await fetch("/admin/backup", {
+                                const response = await fetch("/admin/backup/start", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
                                 });
                                 const data = await response.json();
 
-                                if (data.success) {
-                                    backupStatus.innerHTML = `<div class="alert alert-success mb-0"><strong>✓ Success!</strong> ${data.message}</div>`;
-                                    if (data.details && data.details.files) {
-                                        const filesList = data.details.files.map(f => f.name).join(", ");
-                                        backupResults.innerHTML = `<div class="text-muted small mt-1"><strong>Backed up:</strong> ${filesList}</div>`;
+                                if (data.success && data.jobId) {
+                                    let jobCompleted = false;
+
+                                    while (!jobCompleted) {
+                                        const progressResponse = await fetch(`/admin/backup/progress/${encodeURIComponent(data.jobId)}`);
+                                        const progressData = await progressResponse.json();
+
+                                        if (!progressData.success || !progressData.job) {
+                                            backupStatus.innerHTML = '<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> Could not read backup progress.</div>';
+                                            break;
+                                        }
+
+                                        const job = progressData.job;
+                                        renderBackupProgress(job);
+
+                                        if (job.status === "completed") {
+                                            backupStatus.innerHTML = `<div class="alert alert-success mb-0"><strong>✓ Success!</strong> Backup completed successfully.</div>`;
+                                            if (job.result && job.result.files) {
+                                                const filesList = job.result.files.map((f) => f.name).join(", ");
+                                                const cleanupStatus = job.result.zipDeleted
+                                                    ? "Local temporary zip deleted."
+                                                    : "Local temporary zip could not be deleted.";
+                                                backupResults.innerHTML = `<div class="text-muted small mt-1"><strong>Backed up:</strong> ${filesList}<br><strong>Cleanup:</strong> ${cleanupStatus}</div>`;
+                                            }
+                                            jobCompleted = true;
+                                            break;
+                                        }
+
+                                        if (job.status === "failed") {
+                                            backupStatus.innerHTML = `<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> ${job.error || "Backup failed"}</div>`;
+                                            jobCompleted = true;
+                                            break;
+                                        }
+
+                                        await wait(700);
                                     }
                                 } else if (data.error === "not_authorized") {
                                     await refreshBackupAuthState();

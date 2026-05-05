@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title><%= labels.statsTitle %></title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css" />
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+
+    <body class="app-bg">
+        <header class="navbar navbar-expand-lg app-navbar py-3">
+            <div class="container-xxl">
+                <div>
+                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= labels.statsTitle %></span>
+                    <p class="text-white-50 mb-0 small"><%= labels.statsSubtitle %></p>
+                </div>
+                <div class="nav-controls mt-3 mt-lg-0">
+                    <div class="d-flex flex-wrap gap-2 align-items-start">
+                        <a class="btn btn-sm btn-outline-light" href="/"><%= labels.backToLedger %></a>
+                        <a class="btn btn-sm btn-outline-light" href="/admin/audit"><%= labels.auditTrail %></a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container-fluid app-main-shell px-3 px-xl-4 px-xxl-5 py-4">
+            <% if (stats.totalTransactions === 0) { %>
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <p class="text-secondary mb-0"><%= labels.noStatsData %></p>
+                </div>
+            </div>
+            <% } else { %>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.totalTransactionsStat %></small>
+                            <strong class="fs-4"><%= stats.totalTransactions %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.totalRevenue %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.totalRevenue) %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.averageTransaction %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.averageAmount) %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.medianTransaction %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.medianAmount) %></strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.largestTransaction %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.largestAmount) %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.uniquePayers %></small>
+                            <strong class="fs-4"><%= stats.uniquePayers %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.annualTotalCurrentYear %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.annualCurrentYearTotal) %></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.recent30DaysRevenue %></small>
+                            <strong class="fs-4"><%= formatCurrency(stats.recent30DaysRevenue) %></strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.topPayer %></small>
+                            <div class="fw-semibold"><%= stats.topPayerName %></div>
+                            <div class="text-secondary"><%= formatCurrency(stats.topPayerAmount) %></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.topPurpose %></small>
+                            <div class="fw-semibold"><%= stats.topPurposeName %></div>
+                            <div class="text-secondary"><%= formatCurrency(stats.topPurposeAmount) %></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body p-4">
+                            <small class="text-secondary d-block mb-1"><%= labels.changeVsPreviousMonth %></small>
+                            <% if (stats.monthOverMonthChangePercent === null) { %>
+                            <span class="badge text-bg-light">-</span>
+                            <% } else { %>
+                            <% const isPositive = stats.monthOverMonthChangePercent >= 0; %>
+                            <span class="badge <%= isPositive ? 'text-bg-success' : 'text-bg-danger' %>"><%= isPositive ? '+' : '' %><%= stats.monthOverMonthChangePercent.toFixed(1) %>%</span>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header app-card-header">
+                    <h2 class="h5 mb-0"><%= labels.monthlyBreakdown %></h2>
+                </div>
+                <div class="card-body p-4 border-bottom">
+                    <canvas id="monthlyRevenueChart" height="120"></canvas>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><%= labels.month %></th>
+                                    <th class="text-end"><%= labels.transactionCount %></th>
+                                    <th class="text-end"><%= labels.totalAmount %></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% stats.monthlyBreakdown.forEach((row) => { %>
+                                <tr>
+                                    <td><%= row.monthLabel %></td>
+                                    <td class="text-end"><%= row.count %></td>
+                                    <td class="text-end fw-semibold"><%= formatCurrency(row.total) %></td>
+                                </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+        </main>
+
+        <% if (stats.totalTransactions > 0) { %>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+        <script>
+            (() => {
+                const chartElement = document.getElementById("monthlyRevenueChart");
+                if (!chartElement || typeof Chart === "undefined") {
+                    return;
+                }
+
+                const monthlyRows = <%- JSON.stringify(stats.monthlyBreakdown) %>;
+                const rowsAscending = [...monthlyRows].reverse();
+                const labels = rowsAscending.map((row) => row.monthLabel);
+                const totals = rowsAscending.map((row) => Number(row.total || 0));
+
+                new Chart(chartElement, {
+                    type: "bar",
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: <%- JSON.stringify(labels.totalAmount) %>,
+                                data: totals,
+                                borderWidth: 1,
+                                borderRadius: 8,
+                                backgroundColor: "rgba(37, 80, 216, 0.45)",
+                                borderColor: "rgba(37, 80, 216, 0.9)",
+                            },
+                        ],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false,
+                            },
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            })();
+        </script>
+        <% } %>
+    </body>
+
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title><%= labels.auditTrailTitle %></title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css" />
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+
+    <body class="app-bg">
+        <header class="navbar navbar-expand-lg app-navbar py-3">
+            <div class="container-xxl">
+                <div>
+                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= labels.auditTrailTitle %></span>
+                    <p class="text-white-50 mb-0 small"><%= labels.auditTrail %></p>
+                </div>
+                <div class="nav-controls mt-3 mt-lg-0">
+                    <div class="d-flex align-items-start">
+                        <a class="btn btn-sm btn-outline-light" href="/"><%= labels.backToLedger %></a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container-fluid app-main-shell px-3 px-xl-4 px-xxl-5 py-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <% if (successMessage) { %>
+                    <div class="alert alert-success" role="alert"><%= successMessage %></div>
+                    <% } %>
+
+                    <% if (entries.length === 0) { %>
+                    <p class="text-secondary mb-0"><%= labels.noAuditEntries %></p>
+                    <% } else { %>
+                    <% const hasUndoableDelete = entries.some((entry) => entry.action === 'delete' && !entry.undo?.restoredAt); %>
+                    <% if (!hasUndoableDelete) { %>
+                    <div class="alert alert-info" role="alert">No undoable delete actions are currently available.</div>
+                    <% } %>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><%= labels.timestamp %></th>
+                                    <th><%= labels.action %></th>
+                                    <th><%= labels.transactionId %></th>
+                                    <th><%= labels.receiptNumber %></th>
+                                    <th><%= labels.details %></th>
+                                    <th class="text-end"><%= labels.undo %></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% entries.forEach((entry) => { %>
+                                <tr>
+                                    <td class="js-local-datetime" data-iso="<%= entry.createdAt %>"><%= entry.createdAt %></td>
+                                    <td><span class="badge text-bg-light"><%= entry.action %></span></td>
+                                    <td><%= entry.payload?.transactionId || entry.payload?.after?.id || entry.payload?.before?.id || entry.payload?.transaction?.id || '' %></td>
+                                    <td><%= entry.auditReceiptNumber || '-' %></td>
+                                    <td class="small text-secondary"><%= stringifyAuditDetails(entry.payload || {}) %></td>
+                                    <td class="text-end">
+                                        <% if (entry.action === 'delete') { %>
+                                        <% if (!entry.undo?.restoredAt) { %>
+                                        <form action="/admin/audit/<%= entry.id %>/undo-delete" method="POST" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"><%= labels.undoFromAudit %></button>
+                                        </form>
+                                        <% } else { %>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled><%= labels.undoUnavailable %></button>
+                                        <% } %>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+        </main>
+
+        <script>
+            (() => {
+                const locale = document.documentElement.lang === "he" ? "he-IL" : "en-US";
+                const formatter = new Intl.DateTimeFormat(locale, {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                });
+
+                document.querySelectorAll(".js-local-datetime").forEach((element) => {
+                    const iso = element.getAttribute("data-iso");
+                    if (!iso) {
+                        return;
+                    }
+
+                    const parsed = new Date(iso);
+                    if (Number.isNaN(parsed.getTime())) {
+                        return;
+                    }
+
+                    element.textContent = formatter.format(parsed);
+                    element.title = `${parsed.toLocaleString(locale)} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
+                });
+            })();
+        </script>
+    </body>
+
+</html>

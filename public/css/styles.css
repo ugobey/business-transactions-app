@@ -1,0 +1,264 @@
+:root {
+    --ia-page-bg: linear-gradient(180deg, #eef4ff 0%, #f8fbff 36%, #f3f6fb 100%);
+    --ia-surface: rgba(255, 255, 255, 0.9);
+    --ia-surface-solid: #ffffff;
+    --ia-border: #d9e2f2;
+    --ia-text: #122033;
+    --ia-text-soft: #5c6b82;
+    --ia-brand: #2550d8;
+    --ia-brand-deep: #16358f;
+    --ia-success: #1f8f67;
+    --ia-warning: #b87333;
+    --ia-danger: #c53b53;
+    --ia-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+}
+
+html {
+    font-size: 15px;
+}
+
+@media (max-width: 1680px) {
+    html {
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 1440px) {
+    html {
+        font-size: 11px;
+    }
+}
+
+body {
+    min-height: 100vh;
+    font-family:
+        "Plus Jakarta Sans",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    font-size: 0.97rem;
+    letter-spacing: -0.2px;
+    font-weight: 400;
+    color: var(--ia-text);
+}
+
+.app-bg {
+    background: var(--ia-page-bg);
+}
+
+.app-main-shell {
+    max-width: 2000px;
+    margin-inline: auto;
+}
+
+.app-navbar {
+    background: linear-gradient(135deg, #0f172a 0%, #16264a 48%, #2550d8 100%);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+}
+
+.app-card-header {
+    background: linear-gradient(135deg, #102247 0%, #17357c 52%, #2550d8 100%);
+    color: #ffffff;
+}
+
+.total-revenue-badge {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    padding: 0.7rem 1rem;
+    border-radius: 1rem;
+    min-width: 14rem;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.card {
+    border: 1px solid rgba(17, 24, 39, 0.06);
+    border-radius: 1.4rem;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: var(--ia-shadow);
+    backdrop-filter: blur(10px);
+}
+
+.card-header {
+    border-bottom: 0;
+    padding: 1.2rem 1.35rem;
+}
+
+.card-body {
+    padding: 1.1rem;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    color: var(--ia-text-soft);
+    text-transform: uppercase;
+    border-color: var(--ia-border);
+}
+
+.table td {
+    border-color: #e4ebf6;
+}
+
+.table-light,
+.table-light > th,
+.table-light > td {
+    --bs-table-bg: #edf3ff;
+}
+
+.editable-cell {
+    cursor: pointer;
+}
+
+.ledger-view-row:hover .editable-cell {
+    color: var(--ia-brand-deep);
+}
+
+.ledger-edit-row td {
+    background: #F3F3F3;
+}
+
+.ledger-edit-form .form-label {
+    margin-bottom: 0.35rem;
+    color: var(--ia-text-soft);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.col-receipt,
+.col-date {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.form-control,
+.input-group-text {
+    border-color: var(--ia-border);
+}
+
+.form-control:focus {
+    border-color: #86a4f2;
+    box-shadow: 0 0 0 0.2rem rgba(37, 80, 216, 0.12);
+}
+
+.was-validated .form-control:invalid {
+    border-color: var(--ia-danger);
+}
+
+.was-validated .form-control:invalid:focus {
+    border-color: var(--ia-danger);
+    box-shadow: 0 0 0 0.2rem rgba(197, 59, 83, 0.12);
+}
+
+.invalid-feedback {
+    display: none;
+    font-size: 0.875rem;
+    color: var(--ia-danger);
+    margin-top: 0.25rem;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+}
+
+.was-validated .form-control:invalid ~ .invalid-feedback {
+    display: block;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2550d8 0%, #1f44bb 56%, #16358f 100%);
+    border-color: #2248c4;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background: linear-gradient(135deg, #1f44bb 0%, #1b3ca7 56%, #132f7e 100%);
+    border-color: #1b3ca7;
+}
+
+.btn,
+.btn:hover,
+.btn:focus,
+.btn:active {
+    box-shadow: none !important;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #1a7f5a 0%, var(--ia-success) 58%, #29b081 100%);
+    border-color: #1a7f5a;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #166f4f 0%, #1b7e5c 58%, #239f74 100%);
+    border-color: #166f4f;
+}
+
+.alert-danger {
+    background: #fff5f6;
+    border-color: #f2c7cf;
+    color: #7f1830;
+}
+
+.alert-success {
+    background: #f2fbf7;
+    border-color: #c9eadb;
+    color: #16694b;
+}
+
+.badge.text-bg-light {
+    color: var(--ia-brand-deep) !important;
+    background-color: #eef3ff !important;
+    border: 1px solid #dbe5f5;
+}
+
+html[dir="rtl"] .language-switcher > .btn:first-child:not(:last-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: var(--bs-btn-border-radius);
+    border-bottom-right-radius: var(--bs-btn-border-radius);
+}
+
+html[dir="rtl"] .language-switcher > .btn:last-child:not(:first-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: var(--bs-btn-border-radius);
+    border-bottom-left-radius: var(--bs-btn-border-radius);
+}
+
+html[dir="rtl"] .language-switcher > .btn + .btn {
+    margin-left: 0;
+    margin-right: -1px;
+}
+
+@media (max-width: 991.98px) {
+    body {
+        font-size: 0.94rem;
+    }
+
+    .nav-controls {
+        width: 100%;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .total-revenue-badge {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}

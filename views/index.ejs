@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Business Transactions</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css" />
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+
+    <body class="app-bg">
+        <header class="navbar navbar-expand-lg app-navbar py-3">
+            <div class="container-xxl">
+                <div>
+                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= labels.appTitle %></span>
+                    <p class="text-white-50 mb-0 small"><%= labels.subtitle %></p>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <% if (hasAnyTransactions) { %>
+                        <a class="btn btn-sm btn-outline-light" href="/admin/audit"><%= labels.auditTrail %></a>
+                        <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
+                        <% } %>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="openSettingsModalButton"><%= labels.settings %></button>
+                    </div>
+                </div>
+                <div class="nav-controls mt-3 mt-lg-0">
+                    <div class="total-revenue-badge">
+                        <span class="d-block text-uppercase small fw-semibold"><%= labels.totalRevenue %></span>
+                        <strong class="d-block fs-4"><%= formatCurrency(totalRevenue) %></strong>
+                        <small class="text-white-50"><%= transactions.length %> <%= transactions.length === 1 ? labels.recordedTransactionSingular : labels.recordedTransactionPlural %></small>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <div class="btn-group btn-group-sm language-switcher" role="group" aria-label="<%= labels.language %>">
+                            <button type="button" class="btn <%= lang === 'en' ? 'btn-light' : 'btn-outline-light' %>" data-lang-switch="en"><%= labels.english %></button>
+                            <button type="button" class="btn <%= lang === 'he' ? 'btn-light' : 'btn-outline-light' %>" data-lang-switch="he"><%= labels.hebrew %></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container-fluid app-main-shell px-3 px-xl-4 px-xxl-5 py-4">
+            <div class="row g-4 align-items-start">
+                <div class="col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header app-card-header">
+                            <h2 class="h5 mb-1"><%= labels.newTransaction %></h2>
+                            <p class="mb-0 text-white-50 small"><%= labels.captureIncoming %></p>
+                        </div>
+                        <div class="card-body p-4">
+                            <% if (successMessage) { %>
+                            <div class="alert alert-success" role="alert"><%= successMessage %></div>
+                            <% } %>
+                            <% if (undoDeleteAuditId) { %>
+                            <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert">
+                                <span><%= labels.deleteConfirmBody %></span>
+                                <form action="/audit/<%= undoDeleteAuditId %>/undo-delete" method="POST" class="d-inline">
+                                    <input type="hidden" name="page" value="<%= currentPage %>" />
+                                    <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+                                    <input type="hidden" name="fDate" value="<%= filters.date %>" />
+                                    <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+                                    <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+                                    <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+                                    <button type="submit" class="btn btn-sm btn-outline-dark"><%= labels.undo %></button>
+                                </form>
+                            </div>
+                            <% } %>
+
+                            <form action="/transactions" method="POST" class="vstack gap-3" novalidate>
+                                <div>
+                                    <label for="receiptNumber" class="form-label fw-semibold"><%= labels.receiptNumber %></label>
+                                    <input id="receiptNumber" name="receiptNumber" type="text" maxlength="40" placeholder="RCPT-2026-001" value="<%= formData.receiptNumber %>" class="form-control" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="amount" class="form-label fw-semibold"><%= labels.amountPaid %></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">₪</span>
+                                        <input id="amount" name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00" value="<%= formData.amount %>" class="form-control" required />
+                                    </div>
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="date" class="form-label fw-semibold"><%= labels.date %></label>
+                                    <input id="date" name="date" type="date" value="<%= formData.date %>" max="<%= maxDate %>" class="form-control" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="purpose" class="form-label fw-semibold"><%= labels.whatItWasFor %></label>
+                                    <input id="purpose" name="purpose" type="text" maxlength="120" placeholder="Website design retainer" value="<%= formData.purpose %>" class="form-control" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <div>
+                                    <label for="paidBy" class="form-label fw-semibold"><%= labels.whoPaid %></label>
+                                    <input id="paidBy" name="paidBy" type="text" maxlength="80" placeholder="Client or company name" value="<%= formData.paidBy %>" class="form-control" required />
+                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-100"><%= labels.saveTransaction %></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-9">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header d-flex align-items-center justify-content-between app-card-header">
+                            <h2 class="h5 mb-0"><%= labels.transactionLedger %></h2>
+                            <span class="badge text-bg-light"><%= labels.latestFirst %></span>
+                        </div>
+                        <div class="card-body p-0">
+                            <% if (!hasAnyTransactions) { %>
+                            <div class="text-center py-5 px-3">
+                                <h3 class="h6 mb-2"><%= labels.noTransactionsYet %></h3>
+                                <p class="mb-0 text-secondary"><%= labels.savedPaymentsAppear %></p>
+                            </div>
+                            <% } else { %>
+                            <div class="table-responsive">
+                                <form id="ledger-filters" method="GET"></form>
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="col-receipt"><%= labels.receiptNumber %></th>
+                                            <th class="col-date"><%= labels.date %></th>
+                                            <th><%= labels.paidBy %></th>
+                                            <th><%= labels.purpose %></th>
+                                            <th class="text-end"><%= labels.amount %></th>
+                                        </tr>
+                                        <tr class="table-filter-row">
+                                            <th><input form="ledger-filters" name="receiptNumber" value="<%= filters.receiptNumber %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
+                                            <th>
+                                                <select form="ledger-filters" name="date" class="form-select form-select-sm">
+                                                    <option value=""><%= labels.all %></option>
+                                                    <% availableDates.forEach((dateOption) => { %>
+                                                    <option value="<%= dateOption %>" <%= filters.date === dateOption ? 'selected' : '' %>><%= dateOption %></option>
+                                                    <% }) %>
+                                                </select>
+                                            </th>
+                                            <th><input form="ledger-filters" name="paidBy" value="<%= filters.paidBy %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
+                                            <th><input form="ledger-filters" name="purpose" value="<%= filters.purpose %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
+                                            <th>
+                                                <div class="d-flex gap-2 justify-content-end">
+                                                    <input form="ledger-filters" name="amount" value="<%= filters.amount %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" />
+                                                    <button type="submit" form="ledger-filters" class="btn btn-sm btn-outline-primary d-none" data-filter-apply><%= labels.apply %></button>
+                                                    <% if (hasActiveFilters) { %>
+                                                    <a class="btn btn-sm btn-outline-secondary" href="/"><%= labels.clear %></a>
+                                                    <% } %>
+                                                </div>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (transactions.length === 0) { %>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-5">
+                                                <p class="mb-0 text-secondary"><%= labels.noResultsDescription %></p>
+                                            </td>
+                                        </tr>
+                                        <% } else { %>
+                                        <% transactions.forEach((item) => { %>
+                                        <tr class="ledger-view-row" data-item-id="<%= item.id %>">
+                                            <td class="editable-cell col-receipt" data-open-editor="edit-<%= item.id %>"><%= item.receiptNumber %></td>
+                                            <td class="editable-cell col-date" data-open-editor="edit-<%= item.id %>"><%= item.date %></td>
+                                            <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.paidBy %></td>
+                                            <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.purpose %></td>
+                                            <td class="text-end fw-semibold editable-cell" data-open-editor="edit-<%= item.id %>"><%= formatCurrency(item.amount) %></td>
+                                        </tr>
+                                        <tr id="edit-<%= item.id %>" class="ledger-edit-row" hidden>
+                                            <td colspan="5">
+                                                <form id="update-<%= item.id %>" action="/transactions/<%= item.id %>/update" method="POST" class="ledger-edit-form" data-transaction-id="<%= item.id %>" data-original-receipt="<%= item.receiptNumber %>">
+                                                    <input type="hidden" name="page" value="<%= currentPage %>" />
+                                                    <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+                                                    <input type="hidden" name="fDate" value="<%= filters.date %>" />
+                                                    <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+                                                    <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+                                                    <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+                                                    <div class="row g-3">
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label small fw-semibold"><%= labels.receiptNumber %></label>
+                                                            <input name="receiptNumber" type="text" maxlength="40" value="<%= item.receiptNumber %>" class="form-control" required />
+                                                        </div>
+                                                        <div class="col-lg-3">
+                                                            <label class="form-label small fw-semibold"><%= labels.date %></label>
+                                                            <input name="date" type="date" value="<%= item.date %>" max="<%= maxDate %>" class="form-control" required />
+                                                        </div>
+                                                        <div class="col-lg-5">
+                                                            <label class="form-label small fw-semibold"><%= labels.paidBy %></label>
+                                                            <input name="paidBy" type="text" maxlength="80" value="<%= item.paidBy %>" class="form-control" required />
+                                                        </div>
+                                                        <div class="col-lg-7">
+                                                            <label class="form-label small fw-semibold"><%= labels.purpose %></label>
+                                                            <input name="purpose" type="text" maxlength="120" value="<%= item.purpose %>" class="form-control" required />
+                                                        </div>
+                                                        <div class="col-lg-5">
+                                                            <label class="form-label small fw-semibold"><%= labels.amount %></label>
+                                                            <div class="input-group">
+                                                                <span class="input-group-text">₪</span>
+                                                                <input name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" value="<%= item.amount %>" class="form-control" required />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex gap-2 justify-content-end mt-3">
+                                                        <button type="submit" class="btn btn-success d-none" data-update-button><%= labels.update %></button>
+                                                        <button type="button" class="btn btn-outline-danger" data-open-delete-modal="<%= item.id %>"><%= labels.delete %></button>
+                                                        <button type="button" class="btn btn-outline-secondary" data-close-editor="edit-<%= item.id %>"><%= labels.cancel %></button>
+                                                    </div>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <% }) %>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <% if (totalPages > 1) { %>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-top">
+                                <small class="text-secondary"><%= labels.page %> <%= currentPage %> <%= labels.of %> <%= totalPages %></small>
+                                <nav aria-label="Ledger pagination">
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item <%= currentPage === 1 ? 'disabled' : '' %>">
+                                            <a class="page-link" href="<%= buildPageHref(currentPage - 1) %>"><%= labels.previous %></a>
+                                        </li>
+                                        <% for (let p = 1; p <= totalPages; p += 1) { %>
+                                        <li class="page-item <%= p === currentPage ? 'active' : '' %>">
+                                            <a class="page-link" href="<%= buildPageHref(p) %>"><%= p %></a>
+                                        </li>
+                                        <% } %>
+                                        <li class="page-item <%= currentPage === totalPages ? 'disabled' : '' %>">
+                                            <a class="page-link" href="<%= buildPageHref(currentPage + 1) %>"><%= labels.next %></a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                            <% } %>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+        <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="errorModalLabel"><%= labels.errorTitle %></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body" id="errorModalMessage"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="deleteConfirmModalLabel"><%= labels.deleteConfirmTitle %></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body"><%= labels.deleteConfirmBody %></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteButton"><%= labels.confirmDelete %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="settingsModalLabel"><%= labels.settings %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <form action="/settings" method="POST">
+                        <div class="modal-body vstack gap-3">
+                            <input type="hidden" name="page" value="<%= currentPage %>" />
+                            <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+                            <input type="hidden" name="fDate" value="<%= filters.date %>" />
+                            <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+                            <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+                            <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+
+                            <div>
+                                <label for="annualTotalThreshold" class="form-label fw-semibold"><%= labels.annualThreshold %></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₪</span>
+                                    <input id="annualTotalThreshold" name="annualTotalThreshold" type="number" min="1" step="0.01" class="form-control" value="<%= settings.annualTotalThreshold %>" required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="annualAlertPercent" class="form-label fw-semibold"><%= labels.alertPercentThreshold %></label>
+                                <div class="input-group">
+                                    <input id="annualAlertPercent" name="annualAlertPercent" type="number" min="1" max="100" step="0.1" class="form-control" value="<%= settings.annualAlertPercent %>" required />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
+                            <button type="submit" class="btn btn-primary"><%= labels.saveSettings %></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="annualAlertModal" tabindex="-1" aria-labelledby="annualAlertModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header <%= annualAlertExceeded ? 'bg-danger text-white' : 'bg-warning text-dark' %>">
+                        <h5 class="modal-title" id="annualAlertModalLabel"><%= labels.annualAlertTitle %></h5>
+                        <button type="button" class="btn-close <%= annualAlertExceeded ? 'btn-close-white' : '' %>" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0"><%= annualAlertMessage %></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form id="deleteTransactionForm" method="POST" class="d-none">
+            <input type="hidden" name="page" value="<%= currentPage %>" />
+            <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+            <input type="hidden" name="fDate" value="<%= filters.date %>" />
+            <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+            <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+            <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+        </form>
+
+        <script>
+            (() => {
+                const LANGUAGE_STORAGE_KEY = "preferredLanguage";
+                const currentLang = "<%= lang %>";
+                const initialErrorMessage = <%- JSON.stringify(error || "") %>;
+                const fallbackErrorMessage = <%- JSON.stringify(labels.unexpectedError) %>;
+                const CLIENT_ERROR_PREFIX = "[CLIENT]";
+                const SERVER_ERROR_PREFIX = "[SERVER]";
+                const errorModalElement = document.getElementById("errorModal");
+                const errorModalMessageElement = document.getElementById("errorModalMessage");
+                const errorModal = errorModalElement ? new bootstrap.Modal(errorModalElement) : null;
+                const deleteConfirmModalElement = document.getElementById("deleteConfirmModal");
+                const deleteConfirmModal = deleteConfirmModalElement ? new bootstrap.Modal(deleteConfirmModalElement) : null;
+                const settingsModalElement = document.getElementById("settingsModal");
+                const settingsModal = settingsModalElement ? new bootstrap.Modal(settingsModalElement) : null;
+                const annualAlertModalElement = document.getElementById("annualAlertModal");
+                const annualAlertModal = annualAlertModalElement ? new bootstrap.Modal(annualAlertModalElement) : null;
+                const openSettingsModalButton = document.getElementById("openSettingsModalButton");
+                const deleteTransactionForm = document.getElementById("deleteTransactionForm");
+                const confirmDeleteButton = document.getElementById("confirmDeleteButton");
+                const shouldShowAnnualAlert = <%- JSON.stringify(Boolean(shouldShowAnnualAlert)) %>;
+                const receiptDirectory = <%- JSON.stringify(receiptDirectory || []) %>;
+                const requiredFieldMessage = <%- JSON.stringify(labels.requiredField) %>;
+                const duplicateReceiptMessage = <%- JSON.stringify(labels.duplicateReceiptNumber) %>;
+                let pendingDeleteTransactionId = "";
+
+                function normalizeReceiptNumberValue (value) {
+                    try {
+                        return String(value || "").trim().toLowerCase();
+                    } catch (error) {
+                        throw withFunctionError("normalizeReceiptNumberValue", error);
+                    }
+                }
+
+                function isDuplicateReceipt (value, excludeTransactionId = "", originalReceipt = "") {
+                    try {
+                        const normalized = normalizeReceiptNumberValue(value);
+                        if (!normalized) {
+                            return false;
+                        }
+
+                        if (normalized === normalizeReceiptNumberValue(originalReceipt)) {
+                            return false;
+                        }
+
+                        return receiptDirectory.some((entry) => {
+                            if (!entry || typeof entry !== "object") {
+                                return false;
+                            }
+
+                            if (excludeTransactionId && String(entry.id || "") === String(excludeTransactionId)) {
+                                return false;
+                            }
+
+                            return normalizeReceiptNumberValue(entry.receiptNumber) === normalized;
+                        });
+                    } catch (error) {
+                        throw withFunctionError("isDuplicateReceipt", error);
+                    }
+                }
+
+                function updateReceiptFeedback (input, message) {
+                    try {
+                        if (!input) {
+                            return;
+                        }
+
+                        const wrapper = input.closest("div");
+                        const feedback = wrapper ? wrapper.querySelector(".invalid-feedback") : null;
+                        if (!feedback) {
+                            return;
+                        }
+
+                        feedback.textContent = message || requiredFieldMessage;
+                    } catch (error) {
+                        throw withFunctionError("updateReceiptFeedback", error);
+                    }
+                }
+
+                function withFunctionError (functionName, error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    const contextualError = new Error(`[${functionName}] ${message}`);
+                    contextualError.cause = error;
+                    return contextualError;
+                }
+
+                function showErrorModal (message) {
+                    try {
+                        if (!errorModal || !errorModalMessageElement) {
+                            return;
+                        }
+
+                        errorModalMessageElement.textContent = message || fallbackErrorMessage;
+                        errorModal.show();
+                    } catch (modalError) {
+                        console.error(modalError);
+                    }
+                }
+
+                function toClientErrorMessage (message) {
+                    try {
+                        const normalizedMessage = String(message || fallbackErrorMessage);
+                        if (normalizedMessage.startsWith(CLIENT_ERROR_PREFIX) || normalizedMessage.startsWith(SERVER_ERROR_PREFIX)) {
+                            return normalizedMessage;
+                        }
+
+                        return `${CLIENT_ERROR_PREFIX} ${normalizedMessage}`;
+                    } catch (error) {
+                        return `${CLIENT_ERROR_PREFIX} ${fallbackErrorMessage}`;
+                    }
+                }
+
+                function safeRun (fn) {
+                    try {
+                        fn();
+                    } catch (runtimeError) {
+                        console.error(runtimeError);
+                        showErrorModal(toClientErrorMessage(runtimeError.message || fallbackErrorMessage));
+                    }
+                }
+
+                function safeHandler (handler) {
+                    return (...args) => {
+                        try {
+                            handler(...args);
+                        } catch (runtimeError) {
+                            console.error(runtimeError);
+                            showErrorModal(toClientErrorMessage(runtimeError.message || fallbackErrorMessage));
+                        }
+                    };
+                }
+
+                window.addEventListener("error", (event) => {
+                    const message = event.error?.message || event.message || fallbackErrorMessage;
+                    showErrorModal(toClientErrorMessage(message));
+                });
+
+                window.addEventListener("unhandledrejection", (event) => {
+                    const reason = event.reason;
+                    const message = reason?.message || String(reason || fallbackErrorMessage);
+                    showErrorModal(toClientErrorMessage(message));
+                });
+
+                safeRun(() => {
+                    function isSupportedLanguage (value) {
+                        try {
+                            return value === "en" || value === "he";
+                        } catch (error) {
+                            throw withFunctionError("isSupportedLanguage", error);
+                        }
+                    }
+
+                    function setLanguageCookie (value) {
+                        try {
+                            document.cookie = `lang=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`;
+                        } catch (error) {
+                            throw withFunctionError("setLanguageCookie", error);
+                        }
+                    }
+
+                    function setLanguageAndReload (value) {
+                        try {
+                            if (!isSupportedLanguage(value)) {
+                                return;
+                            }
+
+                            localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+                            setLanguageCookie(value);
+                            window.location.href = `${window.location.pathname}${window.location.hash}`;
+                        } catch (error) {
+                            throw withFunctionError("setLanguageAndReload", error);
+                        }
+                    }
+
+                    const storedLang = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+                    if (isSupportedLanguage(storedLang) && storedLang !== currentLang) {
+                        setLanguageCookie(storedLang);
+                        window.location.href = `${window.location.pathname}${window.location.hash}`;
+                        return;
+                    }
+
+                    if (!isSupportedLanguage(storedLang)) {
+                        localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLang);
+                        setLanguageCookie(currentLang);
+                    }
+
+                    document.querySelectorAll("[data-lang-switch]").forEach((element) => {
+                        element.addEventListener("click", safeHandler(() => {
+                            setLanguageAndReload(element.getAttribute("data-lang-switch"));
+                        }));
+                    });
+                });
+
+                safeRun(() => {
+                    const filterForm = document.getElementById("ledger-filters");
+                    const applyFilterButton = document.querySelector("[data-filter-apply]");
+
+                    function buildFilterSnapshot () {
+                        try {
+                            if (!filterForm) {
+                                return "";
+                            }
+
+                            const pairs = Array.from(document.querySelectorAll('[form="ledger-filters"][name]'))
+                                .map((field) => `${field.name}=${field.value}`);
+
+                            return pairs.join("&");
+                        } catch (error) {
+                            throw withFunctionError("buildFilterSnapshot", error);
+                        }
+                    }
+
+                    if (filterForm && applyFilterButton) {
+                        const initialFilterSnapshot = buildFilterSnapshot();
+
+                        function updateFilterApplyVisibility () {
+                            try {
+                                const currentSnapshot = buildFilterSnapshot();
+                                const hasChanges = currentSnapshot !== initialFilterSnapshot;
+                                applyFilterButton.classList.toggle("d-none", !hasChanges);
+                            } catch (error) {
+                                throw withFunctionError("updateFilterApplyVisibility", error);
+                            }
+                        }
+
+                        document.querySelectorAll('[form="ledger-filters"][name]').forEach((field) => {
+                            field.addEventListener("input", safeHandler(updateFilterApplyVisibility));
+                            field.addEventListener("change", safeHandler(updateFilterApplyVisibility));
+                        });
+
+                        updateFilterApplyVisibility();
+                    }
+                });
+
+                safeRun(() => {
+                    if (initialErrorMessage) {
+                        showErrorModal(initialErrorMessage);
+                    }
+                });
+
+                safeRun(() => {
+                    const currentUrl = new URL(window.location.href);
+                    if (currentUrl.searchParams.has("success") || currentUrl.searchParams.has("lang") || currentUrl.searchParams.has("deletedAudit")) {
+                        currentUrl.searchParams.delete("success");
+                        currentUrl.searchParams.delete("lang");
+                        currentUrl.searchParams.delete("deletedAudit");
+                        const cleanedUrl = `${currentUrl.pathname}${currentUrl.search ? currentUrl.search : ""}${currentUrl.hash}`;
+                        window.history.replaceState({}, document.title, cleanedUrl);
+                    }
+                });
+
+                safeRun(() => {
+                    document.querySelectorAll("[data-open-delete-modal]").forEach((element) => {
+                        element.addEventListener("click", safeHandler(() => {
+                            pendingDeleteTransactionId = element.getAttribute("data-open-delete-modal") || "";
+                            if (pendingDeleteTransactionId && deleteConfirmModal) {
+                                deleteConfirmModal.show();
+                            }
+                        }));
+                    });
+
+                    if (confirmDeleteButton) {
+                        confirmDeleteButton.addEventListener("click", safeHandler(() => {
+                            if (!pendingDeleteTransactionId || !deleteTransactionForm) {
+                                return;
+                            }
+
+                            deleteTransactionForm.action = `/transactions/${encodeURIComponent(pendingDeleteTransactionId)}/delete`;
+                            deleteTransactionForm.submit();
+                        }));
+                    }
+
+                    if (deleteConfirmModalElement) {
+                        deleteConfirmModalElement.addEventListener("hidden.bs.modal", safeHandler(() => {
+                            pendingDeleteTransactionId = "";
+                        }));
+                    }
+                });
+
+                safeRun(() => {
+                    if (openSettingsModalButton && settingsModal) {
+                        openSettingsModalButton.addEventListener("click", safeHandler(() => {
+                            settingsModal.show();
+                        }));
+                    }
+                });
+
+                safeRun(() => {
+                    if (shouldShowAnnualAlert && annualAlertModal) {
+                        annualAlertModal.show();
+                    }
+                });
+
+                safeRun(() => {
+                    const editRows = Array.from(document.querySelectorAll(".ledger-edit-row"));
+                    const editForms = Array.from(document.querySelectorAll(".ledger-edit-form"));
+
+                    function getEditableFields (form) {
+                        try {
+                            if (!form) {
+                                return [];
+                            }
+
+                            return Array.from(form.querySelectorAll("input, select, textarea"))
+                                .filter((field) => field.name && field.type !== "hidden");
+                        } catch (error) {
+                            throw withFunctionError("getEditableFields", error);
+                        }
+                    }
+
+                    function buildFormSnapshot (form) {
+                        try {
+                            return getEditableFields(form)
+                                .map((field) => `${field.name}=${field.value}`)
+                                .join("&");
+                        } catch (error) {
+                            throw withFunctionError("buildFormSnapshot", error);
+                        }
+                    }
+
+                    function updateUpdateButtonVisibility (form) {
+                        try {
+                            if (!form) {
+                                return;
+                            }
+
+                            const updateButton = form.querySelector("[data-update-button]");
+                            if (!updateButton) {
+                                return;
+                            }
+
+                            const initialSnapshot = form.dataset.initialSnapshot || "";
+                            const currentSnapshot = buildFormSnapshot(form);
+                            const hasChanges = currentSnapshot !== initialSnapshot;
+                            updateButton.classList.toggle("d-none", !hasChanges);
+                        } catch (error) {
+                            throw withFunctionError("updateUpdateButtonVisibility", error);
+                        }
+                    }
+
+                    editForms.forEach((form) => {
+                        try {
+                            form.dataset.initialSnapshot = buildFormSnapshot(form);
+                            getEditableFields(form).forEach((field) => {
+                                field.addEventListener("input", safeHandler(() => {
+                                    updateUpdateButtonVisibility(form);
+                                }));
+                                field.addEventListener("change", safeHandler(() => {
+                                    updateUpdateButtonVisibility(form);
+                                }));
+                            });
+                            updateUpdateButtonVisibility(form);
+                        } catch (error) {
+                            throw withFunctionError("initializeEditFormState", error);
+                        }
+                    });
+
+                    function closeAllEditors () {
+                        try {
+                            editRows.forEach((row) => {
+                                row.hidden = true;
+                            });
+                        } catch (error) {
+                            throw withFunctionError("closeAllEditors", error);
+                        }
+                    }
+
+                    function openEditor (editorId) {
+                        try {
+                            const target = document.getElementById(editorId);
+                            if (!target) {
+                                return;
+                            }
+
+                            closeAllEditors();
+                            target.hidden = false;
+                            const form = target.querySelector(".ledger-edit-form");
+                            updateUpdateButtonVisibility(form);
+                            const firstInput = target.querySelector("input");
+                            if (firstInput) {
+                                firstInput.focus();
+                            }
+                        } catch (error) {
+                            throw withFunctionError("openEditor", error);
+                        }
+                    }
+
+                    document.querySelectorAll("[data-open-editor]").forEach((element) => {
+                        element.addEventListener("click", safeHandler(() => {
+                            const editorId = element.getAttribute("data-open-editor");
+                            openEditor(editorId);
+                        }));
+                    });
+
+                    document.querySelectorAll("[data-close-editor]").forEach((element) => {
+                        element.addEventListener("click", safeHandler(() => {
+                            const editorId = element.getAttribute("data-close-editor");
+                            const target = document.getElementById(editorId);
+                            if (target) {
+                                target.hidden = true;
+                            }
+                        }));
+                    });
+                });
+
+                safeRun(() => {
+                    const dateInputs = Array.from(document.querySelectorAll('input[type="date"]'));
+                    dateInputs.forEach((dateInput) => {
+                        try {
+                            dateInput.addEventListener("focus", safeHandler(() => {
+                                try {
+                                    if (dateInput.showPicker) {
+                                        dateInput.showPicker();
+                                    }
+                                } catch (error) {
+                                    console.error(error);
+                                }
+                            }));
+                        } catch (error) {
+                            throw withFunctionError("initializeDatePickerAutoOpen", error);
+                        }
+                    });
+                });
+
+                safeRun(() => {
+                    const newTransactionForm = document.querySelector('form[action="/transactions"]');
+                    if (!newTransactionForm) {
+                        return;
+                    }
+
+                    const newReceiptInput = newTransactionForm.querySelector('input[name="receiptNumber"]');
+                    if (newReceiptInput) {
+                        newReceiptInput.addEventListener("input", safeHandler(() => {
+                            const duplicate = isDuplicateReceipt(newReceiptInput.value);
+                            if (duplicate) {
+                                newReceiptInput.setCustomValidity(duplicateReceiptMessage);
+                                updateReceiptFeedback(newReceiptInput, duplicateReceiptMessage);
+                            } else {
+                                newReceiptInput.setCustomValidity("");
+                                updateReceiptFeedback(newReceiptInput, requiredFieldMessage);
+                            }
+                        }));
+                    }
+
+                    newTransactionForm.addEventListener("submit", safeHandler((event) => {
+                        try {
+                            if (newReceiptInput) {
+                                const duplicate = isDuplicateReceipt(newReceiptInput.value);
+                                if (duplicate) {
+                                    newReceiptInput.setCustomValidity(duplicateReceiptMessage);
+                                    updateReceiptFeedback(newReceiptInput, duplicateReceiptMessage);
+                                } else {
+                                    newReceiptInput.setCustomValidity("");
+                                    updateReceiptFeedback(newReceiptInput, requiredFieldMessage);
+                                }
+                            }
+
+                            if (!newTransactionForm.checkValidity()) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                newTransactionForm.classList.add("was-validated");
+                            } else {
+                                newTransactionForm.classList.remove("was-validated");
+                            }
+                        } catch (error) {
+                            throw withFunctionError("newTransactionFormSubmit", error);
+                        }
+                    }));
+                });
+
+                safeRun(() => {
+                    const editForms = Array.from(document.querySelectorAll(".ledger-edit-form"));
+                    editForms.forEach((form) => {
+                        try {
+                            const receiptInput = form.querySelector('input[name="receiptNumber"]');
+                            const transactionId = form.getAttribute("data-transaction-id") || "";
+                            const originalReceipt = form.getAttribute("data-original-receipt") || "";
+
+                            if (receiptInput) {
+                                receiptInput.addEventListener("input", safeHandler(() => {
+                                    const duplicate = isDuplicateReceipt(receiptInput.value, transactionId, originalReceipt);
+                                    if (duplicate) {
+                                        receiptInput.setCustomValidity(duplicateReceiptMessage);
+                                        updateReceiptFeedback(receiptInput, duplicateReceiptMessage);
+                                    } else {
+                                        receiptInput.setCustomValidity("");
+                                        updateReceiptFeedback(receiptInput, requiredFieldMessage);
+                                    }
+                                }));
+                            }
+
+                            form.addEventListener("submit", safeHandler((event) => {
+                                try {
+                                    if (receiptInput) {
+                                        const duplicate = isDuplicateReceipt(receiptInput.value, transactionId, originalReceipt);
+                                        if (duplicate) {
+                                            receiptInput.setCustomValidity(duplicateReceiptMessage);
+                                            updateReceiptFeedback(receiptInput, duplicateReceiptMessage);
+                                        } else {
+                                            receiptInput.setCustomValidity("");
+                                            updateReceiptFeedback(receiptInput, requiredFieldMessage);
+                                        }
+                                    }
+
+                                    if (!form.checkValidity()) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        form.classList.add("was-validated");
+                                    } else {
+                                        form.classList.remove("was-validated");
+                                    }
+                                } catch (error) {
+                                    throw withFunctionError("editFormSubmit", error);
+                                }
+                            }));
+                        } catch (error) {
+                            throw withFunctionError("initializeEditFormValidation", error);
+                        }
+                    });
+                });
+            })();
+
+        </script>
+    </body>
+
+</html>

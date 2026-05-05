@@ -1,0 +1,25 @@
+{
+  "name": "business-transactions-app",
+  "version": "1.0.0",
+  "description": "Express + EJS app for tracking business transactions with JSON file storage",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": [
+    "express",
+    "ejs",
+    "transactions",
+    "json-db"
+  ],
+  "author": "",
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

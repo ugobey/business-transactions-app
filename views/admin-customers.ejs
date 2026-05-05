@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="<%= lang %>" dir="<%= isRtl ? 'rtl' : 'ltr' %>">
+
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title><%= labels.customersTitle %></title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css" />
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+
+    <body class="app-bg">
+        <header class="navbar navbar-expand-lg app-navbar py-3">
+            <div class="container-xxl">
+                <div>
+                    <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= settings.appBrand || 'Business Transactions' %></span>
+                    <p class="text-white-50 mb-0 small"><%= labels.customers %></p>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <a class="btn btn-sm btn-outline-light" href="/"><%= labels.backToLedger %></a>
+                        <a class="btn btn-sm btn-outline-light" href="/admin/audit"><%= labels.auditTrail %></a>
+                        <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container-fluid app-main-shell px-3 px-xl-4 px-xxl-5 py-4">
+            <div class="mb-3">
+                <h2 class="fw-bold mb-1"><%= labels.customersTitle %></h2>
+                <p class="text-secondary mb-0"><%= labels.customersSubtitle %></p>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <% if (successMessage) { %>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <%= successMessage %>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <% } %>
+
+                    <% if (errorMessage) { %>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <%= errorMessage %>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <% } %>
+
+                    <% if (customers.length === 0) { %>
+                    <p class="text-secondary mb-0"><%= labels.noCustomers %></p>
+                    <p class="text-secondary small mb-0"><%= labels.noCustomersDescription %></p>
+                    <% } else { %>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><%= labels.customerId %></th>
+                                    <th><%= labels.customerName %></th>
+                                    <th class="text-end"><%= labels.transactionCountLabel %></th>
+                                    <th class="text-end"><%= labels.totalRevenueLabel %></th>
+                                    <th><%= labels.firstTransaction %></th>
+                                    <th><%= labels.lastTransaction %></th>
+                                    <th class="text-end"><%= labels.actions %></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% customers.forEach((customer) => { %>
+                                <tr id="row-<%= customer.customerId %>">
+                                    <td><code><%= customer.customerId %></code></td>
+                                    <td class="customer-name-cell"><%= customer.paidBy %></td>
+                                    <td class="text-end"><%= customer.transactionCount %></td>
+                                    <td class="text-end">
+                                        ₪<%= customer.totalRevenue.toLocaleString('en-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                                    </td>
+                                    <td><%= customer.firstTransactionDate || '—' %></td>
+                                    <td><%= customer.lastTransactionDate || '—' %></td>
+                                    <td class="text-end">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary rename-btn"
+                                            data-customer-id="<%= customer.customerId %>"
+                                            data-current-name="<%= customer.paidBy %>"
+                                        ><%= labels.renameCustomer %></button>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+        </main>
+
+        <!-- Rename Modal -->
+        <div class="modal fade" id="renameModal" tabindex="-1" aria-labelledby="renameModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="renameModalLabel"><%= labels.renameCustomerTitle %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <form id="renameForm" method="POST" action="">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="renameCustomerIdDisplay" class="form-label fw-semibold"><%= labels.customerId %></label>
+                                <input type="text" id="renameCustomerIdDisplay" class="form-control" readonly disabled />
+                            </div>
+                            <div class="mb-1">
+                                <label for="newNameInput" class="form-label fw-semibold"><%= labels.renameCustomerLabel %></label>
+                                <input type="text" id="newNameInput" name="newName" class="form-control" maxlength="200" required autocomplete="off" />
+                                <div class="invalid-feedback"><%= labels.requiredField %></div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
+                            <button type="submit" class="btn btn-primary"><%= labels.saveRename %></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+        <script>
+            (function () {
+                const renameModal = new bootstrap.Modal(document.getElementById('renameModal'));
+                const renameForm = document.getElementById('renameForm');
+                const renameCustomerIdDisplay = document.getElementById('renameCustomerIdDisplay');
+                const newNameInput = document.getElementById('newNameInput');
+
+                document.querySelectorAll('.rename-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        const customerId = btn.dataset.customerId;
+                        const currentName = btn.dataset.currentName;
+                        renameCustomerIdDisplay.value = customerId;
+                        newNameInput.value = currentName;
+                        renameForm.action = '/admin/customers/' + encodeURIComponent(customerId) + '/rename';
+                        newNameInput.classList.remove('is-invalid');
+                        renameModal.show();
+                        setTimeout(function () { newNameInput.focus(); newNameInput.select(); }, 300);
+                    });
+                });
+
+                renameForm.addEventListener('submit', function (e) {
+                    const val = newNameInput.value.trim();
+                    if (!val) {
+                        e.preventDefault();
+                        newNameInput.classList.add('is-invalid');
+                    }
+                });
+            })();
+        </script>
+    </body>
+
+</html>

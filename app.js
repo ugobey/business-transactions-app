@@ -15,6 +15,7 @@ const {
     readAuditTrail,
     undoDeleteByAuditId,
     undoRefundByAuditId,
+    renameCustomer,
 } = require("./lib/database");
 require("dotenv").config();
 const { backupAppData, initializeAuth, getAuthUrl, exchangeCodeForToken, revokeAuth, listBackupFiles, restoreAppData } = require("./lib/backup");
@@ -325,6 +326,26 @@ const TRANSLATIONS = {
         restoreConfirmButton: "Yes, Restore",
         backupTitle: "Google Drive Backup",
         backupDescription: "Backup your transactions, audit trail, and receipts to Google Drive.",
+        customers: "Customers",
+        customersTitle: "Customer CRM",
+        customersSubtitle: "View and manage all customers derived from your transactions.",
+        customerId: "Customer ID",
+        customerName: "Name",
+        transactionCountLabel: "Transactions",
+        totalRevenueLabel: "Total Revenue",
+        firstTransaction: "First Transaction",
+        lastTransaction: "Last Transaction",
+        actions: "Actions",
+        renameCustomer: "Rename",
+        renameCustomerTitle: "Rename Customer",
+        renameCustomerLabel: "New name",
+        saveRename: "Save",
+        noCustomers: "No customers found.",
+        noCustomersDescription: "Customers will appear here once transactions with a customer ID are recorded.",
+        successCustomerRenamed: "Customer renamed successfully.",
+        errorCustomerNotFound: "Customer not found.",
+        errorCustomerSameName: "The new name is the same as the current name.",
+        errorCustomerInvalidInput: "Please provide a valid customer ID and new name.",
     },
     he: {
         appTitle: "עסקאות עסקיות של אביטל פרהנג",
@@ -479,6 +500,26 @@ const TRANSLATIONS = {
         restoreConfirmButton: "כן, שחזר",
         backupTitle: "גיבוי Google Drive",
         backupDescription: "גבה את ההעסקאות שלך, יומן ביקורת וקבלות ל-Google Drive.",
+        customers: "לקוחות",
+        customersTitle: "CRM לקוחות",
+        customersSubtitle: "צפייה וניהול כל הלקוחות שנגזרים מהעסקאות שלך.",
+        customerId: "מזהה לקוח",
+        customerName: "שם",
+        transactionCountLabel: "עסקאות",
+        totalRevenueLabel: "סך הכנסות",
+        firstTransaction: "עסקה ראשונה",
+        lastTransaction: "עסקה אחרונה",
+        actions: "פעולות",
+        renameCustomer: "שנה שם",
+        renameCustomerTitle: "שינוי שם לקוח",
+        renameCustomerLabel: "שם חדש",
+        saveRename: "שמור",
+        noCustomers: "לא נמצאו לקוחות.",
+        noCustomersDescription: "לקוחות יופיעו כאן לאחר שירשמו עסקאות עם מזהה לקוח.",
+        successCustomerRenamed: "שם הלקוח שונה בהצלחה.",
+        errorCustomerNotFound: "הלקוח לא נמצא.",
+        errorCustomerSameName: "השם החדש זהה לשם הנוכחי.",
+        errorCustomerInvalidInput: "נא לספק מזהה לקוח ושם חדש תקינים.",
     },
 };
 
@@ -2467,6 +2508,84 @@ app.post("/admin/audit/:auditId/undo-refund", async (req, res, next) => {
         return res.redirect("/admin/audit?success=2");
     } catch (error) {
         return next(withFunctionError("app.post /admin/audit/:auditId/undo-refund", error));
+    }
+});
+
+app.get("/admin/customers", async (req, res, next) => {
+    try {
+        const lang = resolveLanguage(req);
+        const labels = TRANSLATIONS[lang];
+        const settings = await readAppSettings();
+        const successCode = req.query.success;
+        const errorCode = String(req.query.error || "").trim();
+
+        const successMessage = successCode === "1" ? labels.successCustomerRenamed : null;
+        const errorMessage = errorCode === "not-found"
+            ? labels.errorCustomerNotFound
+            : errorCode === "same-name"
+                ? labels.errorCustomerSameName
+                : errorCode === "invalid-input"
+                    ? labels.errorCustomerInvalidInput
+                    : "";
+
+        const transactions = await readTransactions();
+
+        const customerMap = new Map();
+        for (const t of transactions) {
+            const cid = String(t.customer_id || "").trim();
+            if (!cid) {
+                continue;
+            }
+            if (!customerMap.has(cid)) {
+                customerMap.set(cid, {
+                    customerId: cid,
+                    paidBy: String(t.paidBy || "").trim(),
+                    transactionCount: 0,
+                    totalRevenue: 0,
+                    firstTransactionDate: t.date,
+                    lastTransactionDate: t.date,
+                });
+            }
+            const entry = customerMap.get(cid);
+            entry.transactionCount += 1;
+            entry.totalRevenue += Number(t.amount) || 0;
+            if (t.date && t.date < entry.firstTransactionDate) {
+                entry.firstTransactionDate = t.date;
+            }
+            if (t.date && t.date > entry.lastTransactionDate) {
+                entry.lastTransactionDate = t.date;
+            }
+        }
+
+        const customers = Array.from(customerMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+        return res.status(200).render("admin-customers", {
+            lang,
+            isRtl: lang === "he",
+            labels,
+            settings,
+            customers,
+            successMessage,
+            errorMessage,
+        });
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/customers", error));
+    }
+});
+
+app.post("/admin/customers/:customerId/rename", async (req, res, next) => {
+    try {
+        const customerId = String(req.params.customerId || "").trim();
+        const newName = String(req.body?.newName || "").trim();
+
+        const result = await renameCustomer(customerId, newName);
+        if (!result.renamed) {
+            return res.redirect(`/admin/customers?error=${encodeURIComponent(result.reason)}`);
+        }
+
+        return res.redirect("/admin/customers?success=1");
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/customers/:customerId/rename", error));
     }
 });
 

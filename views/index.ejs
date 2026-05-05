@@ -24,6 +24,9 @@
                         <a class="btn btn-sm btn-outline-light" href="/admin/audit"><%= labels.auditTrail %></a>
                         <% } %>
                         <% if (hasAnyTransactions) { %>
+                        <a class="btn btn-sm btn-outline-light" href="/admin/customers"><%= labels.customers %></a>
+                        <% } %>
+                        <% if (hasAnyTransactions) { %>
                         <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
                         <% } %>
                         <button type="button" class="btn btn-sm btn-outline-light" id="openBackupModalButton"><%= hasAnyTransactions ? (labels.backupRestore || 'Backup / Restore') : (labels.restore || 'Restore') %></button>

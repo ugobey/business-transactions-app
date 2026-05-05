@@ -24,6 +24,7 @@
                         <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
                         <% } %>
                         <button type="button" class="btn btn-sm btn-outline-light" id="openSettingsModalButton"><%= labels.settings %></button>
+                                            <button type="button" class="btn btn-sm btn-outline-light" id="openBackupModalButton"><%= labels.backup || "Backup" %></button>
                     </div>
                 </div>
                 <div class="nav-controls mt-3 mt-lg-0">
@@ -487,6 +488,35 @@
             </div>
         </div>
 
+        <div class="modal fade" id="backupModal" tabindex="-1" aria-labelledby="backupModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="backupModalLabel"><%= labels.backup || "Backup" %> — Google Drive</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="backupAuthSection" class="d-none">
+                            <p class="mb-3 text-muted small">Connect your Google account to back up transactions, audit trail, and receipts to your personal Google Drive.</p>
+                            <a href="/admin/backup/auth" target="_blank" class="btn btn-outline-primary w-100" id="backupConnectButton">Connect Google Drive</a>
+                            <p class="mt-2 text-muted small text-center">A new tab will open for authorization. Return here and click "Check Connection" after approving.</p>
+                            <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-1" id="backupCheckConnectionButton">Check Connection</button>
+                        </div>
+                        <div id="backupConnectedSection" class="d-none">
+                            <div class="alert alert-success py-2 mb-3">✓ Google Drive connected</div>
+                        </div>
+                        <div id="backupStatus" class="mb-2"></div>
+                        <div id="backupResults"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-danger me-auto d-none" id="backupDisconnectButton">Disconnect</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
+                        <button type="button" class="btn btn-primary d-none" id="backupNowButton">Backup Now</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="modal fade" id="annualAlertModal" tabindex="-1" aria-labelledby="annualAlertModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -538,6 +568,16 @@
                 const receiptPreviewDownloadButton = document.getElementById("receiptPreviewDownloadButton");
                 const receiptPreviewModal = receiptPreviewModalElement ? new bootstrap.Modal(receiptPreviewModalElement) : null;
                 const openSettingsModalButton = document.getElementById("openSettingsModalButton");
+                const backupModalElement = document.getElementById("backupModal");
+                const backupModal = backupModalElement ? new bootstrap.Modal(backupModalElement) : null;
+                const openBackupModalButton = document.getElementById("openBackupModalButton");
+                const backupNowButton = document.getElementById("backupNowButton");
+                const backupStatus = document.getElementById("backupStatus");
+                const backupResults = document.getElementById("backupResults");
+                const backupAuthSection = document.getElementById("backupAuthSection");
+                const backupConnectedSection = document.getElementById("backupConnectedSection");
+                const backupCheckConnectionButton = document.getElementById("backupCheckConnectionButton");
+                const backupDisconnectButton = document.getElementById("backupDisconnectButton");
                 const deleteTransactionForm = document.getElementById("deleteTransactionForm");
                 const confirmDeleteButton = document.getElementById("confirmDeleteButton");
                 const confirmReplaceReceiptButton = document.getElementById("confirmReplaceReceiptButton");
@@ -554,6 +594,23 @@
                 let activeReceiptPreviewObjectUrl = "";
                 let pendingReplaceReceiptForm = null;
                 let pendingReplaceReceiptSubmitter = null;
+
+                async function refreshBackupAuthState () {
+                    try {
+                        const res = await fetch("/admin/backup/status");
+                        const data = await res.json();
+                        const authorized = data.configured && data.authorized;
+                        backupAuthSection.classList.toggle("d-none", authorized);
+                        backupConnectedSection.classList.toggle("d-none", !authorized);
+                        backupNowButton.classList.toggle("d-none", !authorized);
+                        backupDisconnectButton.classList.toggle("d-none", !authorized);
+                    } catch {
+                        backupAuthSection.classList.remove("d-none");
+                        backupConnectedSection.classList.add("d-none");
+                        backupNowButton.classList.add("d-none");
+                        backupDisconnectButton.classList.add("d-none");
+                    }
+                }
 
                 function isAllowedAttachmentFileType (file) {
                     try {
@@ -1168,6 +1225,68 @@
                     if (openSettingsModalButton && settingsModal) {
                         openSettingsModalButton.addEventListener("click", safeHandler(() => {
                             settingsModal.show();
+                        }));
+                    }
+                });
+
+                safeRun(() => {
+                    if (openBackupModalButton && backupModal) {
+                        openBackupModalButton.addEventListener("click", safeHandler(async () => {
+                            backupStatus.innerHTML = "";
+                            backupResults.innerHTML = "";
+                            backupModal.show();
+                            await refreshBackupAuthState();
+                        }));
+                    }
+                });
+
+                safeRun(() => {
+                    if (backupCheckConnectionButton) {
+                        backupCheckConnectionButton.addEventListener("click", safeHandler(async () => {
+                            backupCheckConnectionButton.disabled = true;
+                            await refreshBackupAuthState();
+                            backupCheckConnectionButton.disabled = false;
+                        }));
+                    }
+
+                    if (backupDisconnectButton) {
+                        backupDisconnectButton.addEventListener("click", safeHandler(async () => {
+                            await fetch("/admin/backup/revoke", { method: "POST" });
+                            backupStatus.innerHTML = "";
+                            backupResults.innerHTML = "";
+                            await refreshBackupAuthState();
+                        }));
+                    }
+
+                    if (backupNowButton) {
+                        backupNowButton.addEventListener("click", safeHandler(async () => {
+                            try {
+                                backupStatus.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading...</span></div>Backing up...';
+                                backupResults.innerHTML = "";
+                                backupNowButton.disabled = true;
+
+                                const response = await fetch("/admin/backup", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                });
+                                const data = await response.json();
+
+                                if (data.success) {
+                                    backupStatus.innerHTML = `<div class="alert alert-success mb-0"><strong>✓ Success!</strong> ${data.message}</div>`;
+                                    if (data.details && data.details.files) {
+                                        const filesList = data.details.files.map(f => f.name).join(", ");
+                                        backupResults.innerHTML = `<div class="text-muted small mt-1"><strong>Backed up:</strong> ${filesList}</div>`;
+                                    }
+                                } else if (data.error === "not_authorized") {
+                                    await refreshBackupAuthState();
+                                } else {
+                                    backupStatus.innerHTML = `<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> ${data.error || "Backup failed"}</div>`;
+                                }
+                            } catch (fetchError) {
+                                backupStatus.innerHTML = `<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> ${fetchError.message}</div>`;
+                            } finally {
+                                backupNowButton.disabled = false;
+                            }
                         }));
                     }
                 });

@@ -15,6 +15,8 @@ const {
     undoDeleteByAuditId,
     undoRefundByAuditId,
 } = require("./lib/database");
+require("dotenv").config();
+const { backupAppData, initializeAuth, getAuthUrl, exchangeCodeForToken, revokeAuth } = require("./lib/backup");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -269,6 +271,9 @@ const TRANSLATIONS = {
         customerIdRequired: "Customer ID is required.",
         customerIdMismatch: "Customer ID must match the existing customer record for this payer.",
         customerNameMismatch: "This Customer ID is already linked to a different payer.",
+        backup: "Backup",
+        backupTitle: "Google Drive Backup",
+        backupDescription: "Backup your transactions, audit trail, and receipts to Google Drive.",
     },
     he: {
         appTitle: "עסקאות עסקיות של אביטל פרהנג",
@@ -410,6 +415,9 @@ const TRANSLATIONS = {
         customerIdRequired: "נדרש מזהה לקוח.",
         customerIdMismatch: "מזהה הלקוח חייב להתאים לרשומת הלקוח הקיימת עבור משלם זה.",
         customerNameMismatch: "מזהה לקוח זה כבר משויך למשלם אחר.",
+        backup: "גיבוי",
+        backupTitle: "גיבוי Google Drive",
+        backupDescription: "גבה את ההעסקאות שלך, יומן ביקורת וקבלות ל-Google Drive.",
     },
 };
 
@@ -1569,6 +1577,91 @@ app.post("/settings", async (req, res, next) => {
         return res.redirect(buildIndexPath({ success: 5, page, filters }));
     } catch (error) {
         return next(withFunctionError("app.post /settings", error));
+    }
+});
+
+// --- Google Drive Backup OAuth2 routes ---
+
+function getCredentialsPath() {
+    return process.env.GOOGLE_CREDENTIALS_PATH || null;
+}
+
+app.get("/admin/backup/status", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.json({ configured: false, authorized: false });
+        }
+        const authorized = await initializeAuth(credentialsPath);
+        return res.json({ configured: true, authorized });
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/backup/status", error));
+    }
+});
+
+app.get("/admin/backup/auth", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.status(400).send("GOOGLE_CREDENTIALS_PATH not set in .env file.");
+        }
+        const redirectUri = `${req.protocol}://${req.get("host")}/admin/backup/auth/callback`;
+        const authUrl = await getAuthUrl(credentialsPath, redirectUri);
+        return res.redirect(authUrl);
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/backup/auth", error));
+    }
+});
+
+app.get("/admin/backup/auth/callback", async (req, res, next) => {
+    try {
+        const code = String(req.query.code || "").trim();
+        if (!code) {
+            return res.status(400).send("Missing authorization code.");
+        }
+        await exchangeCodeForToken(code);
+        return res.send(`<html><body><p>Google Drive connected successfully! You can close this tab.</p><script>window.close();</script></body></html>`);
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/backup/auth/callback", error));
+    }
+});
+
+app.post("/admin/backup/revoke", async (req, res, next) => {
+    try {
+        await revokeAuth();
+        return res.json({ success: true });
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/backup/revoke", error));
+    }
+});
+
+app.post("/admin/backup", async (req, res, next) => {
+    try {
+        const credentialsPath = getCredentialsPath();
+        if (!credentialsPath) {
+            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+        }
+        const authorized = await initializeAuth(credentialsPath);
+        if (!authorized) {
+            return res.status(401).json({ success: false, error: "not_authorized" });
+        }
+        try {
+            const dataFilePath = path.join(__dirname, "data", "transactions.json");
+            const auditFilePath = path.join(__dirname, "data", "audit-trail.json");
+            const uploadsPath = path.join(__dirname, "uploads");
+            const backupResult = await backupAppData(dataFilePath, auditFilePath, uploadsPath);
+            return res.json({
+                success: true,
+                message: `Backup created successfully at ${backupResult.timestamp}`,
+                filesBackedUp: backupResult.files.length,
+                details: backupResult,
+            });
+        } catch (backupError) {
+            console.error("Backup error:", backupError);
+            return res.status(500).json({ success: false, error: backupError.message || "Backup failed" });
+        }
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/backup", error));
     }
 });
 

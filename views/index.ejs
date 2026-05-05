@@ -68,15 +68,24 @@
                                 </form>
                             </div>
                             <% } %>
+                            <% if (undoRefundAuditId) { %>
+                            <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert">
+                                <span><%= labels.refundUndoBody %></span>
+                                <form action="/audit/<%= undoRefundAuditId %>/undo-refund" method="POST" class="d-inline">
+                                    <input type="hidden" name="page" value="<%= currentPage %>" />
+                                    <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+                                    <input type="hidden" name="fDate" value="<%= filters.date %>" />
+                                    <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+                                    <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+                                    <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+                                    <button type="submit" class="btn btn-sm btn-outline-dark"><%= labels.undo %></button>
+                                </form>
+                            </div>
+                            <% } %>
 
                             <datalist id="knownCustomersList">
                                 <% customerDirectory.forEach((entry) => { %>
-                                <option value="<%= entry.paidBy %>" data-customer-id="<%= entry.customerId %>"></option>
-                                <% }) %>
-                            </datalist>
-                            <datalist id="knownCustomerIdsList">
-                                <% customerDirectory.forEach((entry) => { %>
-                                <option value="<%= entry.customerId %>"></option>
+                                <option value="<%= entry.paidBy %>" label="<%= entry.customerId ? `${entry.paidBy} (${entry.customerId})` : entry.paidBy %>" data-customer-id="<%= entry.customerId %>"></option>
                                 <% }) %>
                             </datalist>
 
@@ -110,13 +119,7 @@
 
                                 <div>
                                     <label for="paidBy" class="form-label fw-semibold"><%= labels.whoPaid %></label>
-                                    <input id="paidBy" name="paidBy" type="text" maxlength="80" placeholder="Client or company name" value="<%= formData.paidBy %>" class="form-control" list="knownCustomersList" required />
-                                    <div class="invalid-feedback"><%= labels.requiredField %></div>
-                                </div>
-
-                                <div>
-                                    <label for="customer_id" class="form-label fw-semibold"><%= labels.customerId %></label>
-                                    <input id="customer_id" name="customer_id" type="text" maxlength="80" value="<%= formData.customer_id %>" class="form-control" list="knownCustomerIdsList" required />
+                                    <input id="paidBy" name="paidBy" type="text" maxlength="120" placeholder="Client or company name" value="<%= formData.paidBy %>" class="form-control" list="knownCustomersList" autocomplete="off" required />
                                     <div class="invalid-feedback"><%= labels.requiredField %></div>
                                 </div>
 
@@ -142,24 +145,13 @@
                                     <select id="status" name="status" class="form-select" required>
                                         <option value="paid" <%= formData.status === 'paid' ? 'selected' : '' %>><%= labels.statusPaid %></option>
                                         <option value="partially_paid" <%= formData.status === 'partially_paid' ? 'selected' : '' %>><%= labels.statusPartiallyPaid %></option>
-                                        <option value="refunded" <%= formData.status === 'refunded' ? 'selected' : '' %>><%= labels.statusRefunded %></option>
                                         <option value="pending" <%= formData.status === 'pending' ? 'selected' : '' %>><%= labels.statusPending %></option>
                                     </select>
-                                </div>
-
-                                <div class="form-check">
-                                    <input id="is_refund" name="is_refund" type="checkbox" value="true" class="form-check-input" <%= formData.is_refund ? 'checked' : '' %> />
-                                    <label for="is_refund" class="form-check-label"><%= labels.isRefund %></label>
                                 </div>
 
                                 <div>
                                     <label for="notes" class="form-label fw-semibold"><%= labels.notes %></label>
                                     <textarea id="notes" name="notes" rows="2" maxlength="500" class="form-control"><%= formData.notes %></textarea>
-                                </div>
-
-                                <div>
-                                    <label for="attachment_path" class="form-label fw-semibold"><%= labels.attachmentPath %></label>
-                                    <input id="attachment_path" name="attachment_path" type="text" maxlength="255" value="<%= formData.attachment_path %>" class="form-control" />
                                 </div>
 
                                 <div>
@@ -195,8 +187,10 @@
                                             <th class="col-receipt"><%= labels.receiptNumber %></th>
                                             <th class="col-date"><%= labels.date %></th>
                                             <th><%= labels.paidBy %></th>
+                                            <th><%= labels.customerId %></th>
                                             <th><%= labels.purpose %></th>
                                             <th class="text-end"><%= labels.amount %></th>
+                                            <th class="text-end"><%= labels.action %></th>
                                         </tr>
                                         <tr class="table-filter-row">
                                             <th><input form="ledger-filters" name="receiptNumber" value="<%= filters.receiptNumber %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
@@ -209,6 +203,7 @@
                                                 </select>
                                             </th>
                                             <th><input form="ledger-filters" name="paidBy" value="<%= filters.paidBy %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
+                                            <th></th>
                                             <th><input form="ledger-filters" name="purpose" value="<%= filters.purpose %>" class="form-control form-control-sm" placeholder="<%= labels.filter %>" /></th>
                                             <th>
                                                 <div class="d-flex gap-2 justify-content-end">
@@ -219,12 +214,13 @@
                                                     <% } %>
                                                 </div>
                                             </th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <% if (transactions.length === 0) { %>
                                         <tr>
-                                            <td colspan="5" class="text-center py-5">
+                                            <td colspan="7" class="text-center py-5">
                                                 <p class="mb-0 text-secondary"><%= labels.noResultsDescription %></p>
                                             </td>
                                         </tr>
@@ -234,11 +230,23 @@
                                             <td class="editable-cell col-receipt" data-open-editor="edit-<%= item.id %>"><%= item.receiptNumber %></td>
                                             <td class="editable-cell col-date" data-open-editor="edit-<%= item.id %>"><%= item.date %></td>
                                             <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.paidBy %></td>
+                                            <td><span class="badge text-bg-light"><%= item.customer_id || '-' %></span></td>
                                             <td class="editable-cell" data-open-editor="edit-<%= item.id %>"><%= item.purpose %></td>
                                             <td class="text-end fw-semibold editable-cell" data-open-editor="edit-<%= item.id %>"><%= formatCurrency(item.amount) %></td>
+                                            <td class="text-end">
+                                                <form action="/transactions/<%= item.id %>/refund" method="POST" class="d-inline">
+                                                    <input type="hidden" name="page" value="<%= currentPage %>" />
+                                                    <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
+                                                    <input type="hidden" name="fDate" value="<%= filters.date %>" />
+                                                    <input type="hidden" name="fPaidBy" value="<%= filters.paidBy %>" />
+                                                    <input type="hidden" name="fPurpose" value="<%= filters.purpose %>" />
+                                                    <input type="hidden" name="fAmount" value="<%= filters.amount %>" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning" <%= item.status === 'refunded' ? 'disabled' : '' %>><%= labels.refund %></button>
+                                                </form>
+                                            </td>
                                         </tr>
                                         <tr id="edit-<%= item.id %>" class="ledger-edit-row" hidden>
-                                            <td colspan="5">
+                                            <td colspan="7">
                                                 <form id="update-<%= item.id %>" action="/transactions/<%= item.id %>/update" method="POST" enctype="multipart/form-data" class="ledger-edit-form" data-transaction-id="<%= item.id %>" data-original-receipt="<%= item.receiptNumber %>">
                                                     <input type="hidden" name="page" value="<%= currentPage %>" />
                                                     <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
@@ -258,7 +266,7 @@
                                                         </div>
                                                         <div class="col-lg-5">
                                                             <label class="form-label small fw-semibold"><%= labels.paidBy %></label>
-                                                            <input name="paidBy" type="text" maxlength="80" value="<%= item.paidBy %>" class="form-control" list="knownCustomersList" required />
+                                                            <input name="paidBy" type="text" maxlength="120" value="<%= item.paidBy %>" class="form-control" list="knownCustomersList" autocomplete="off" required />
                                                         </div>
                                                         <div class="col-lg-7">
                                                             <label class="form-label small fw-semibold"><%= labels.purpose %></label>
@@ -273,7 +281,7 @@
                                                         </div>
                                                         <div class="col-lg-4">
                                                             <label class="form-label small fw-semibold"><%= labels.customerId %></label>
-                                                            <input name="customer_id" type="text" maxlength="80" value="<%= item.customer_id || '' %>" class="form-control" list="knownCustomerIdsList" required />
+                                                            <input type="text" value="<%= item.customer_id || '-' %>" class="form-control" readonly />
                                                         </div>
                                                         <div class="col-lg-4">
                                                             <label class="form-label small fw-semibold"><%= labels.paymentMethod %></label>
@@ -293,23 +301,12 @@
                                                             <select name="status" class="form-select" required>
                                                                 <option value="paid" <%= (item.status || 'paid') === 'paid' ? 'selected' : '' %>><%= labels.statusPaid %></option>
                                                                 <option value="partially_paid" <%= item.status === 'partially_paid' ? 'selected' : '' %>><%= labels.statusPartiallyPaid %></option>
-                                                                <option value="refunded" <%= item.status === 'refunded' ? 'selected' : '' %>><%= labels.statusRefunded %></option>
                                                                 <option value="pending" <%= item.status === 'pending' ? 'selected' : '' %>><%= labels.statusPending %></option>
                                                             </select>
-                                                        </div>
-                                                        <div class="col-lg-4 d-flex align-items-end">
-                                                            <div class="form-check">
-                                                                <input id="is_refund_<%= item.id %>" name="is_refund" type="checkbox" value="true" class="form-check-input" <%= item.is_refund ? 'checked' : '' %> />
-                                                                <label class="form-check-label" for="is_refund_<%= item.id %>"><%= labels.isRefund %></label>
-                                                            </div>
                                                         </div>
                                                         <div class="col-lg-12">
                                                             <label class="form-label small fw-semibold"><%= labels.notes %></label>
                                                             <textarea name="notes" rows="2" maxlength="500" class="form-control"><%= item.notes || '' %></textarea>
-                                                        </div>
-                                                        <div class="col-lg-6">
-                                                            <label class="form-label small fw-semibold"><%= labels.attachmentPath %></label>
-                                                            <input name="attachment_path" type="text" maxlength="255" value="<%= item.attachment_path || '' %>" class="form-control" />
                                                         </div>
                                                         <div class="col-lg-6">
                                                             <label class="form-label small fw-semibold"><%= labels.attachmentUpload %></label>
@@ -318,6 +315,7 @@
                                                     </div>
                                                     <div class="d-flex gap-2 justify-content-end mt-3">
                                                         <button type="submit" class="btn btn-success d-none" data-update-button><%= labels.update %></button>
+                                                        <button type="submit" formaction="/transactions/<%= item.id %>/refund" formmethod="POST" class="btn btn-outline-warning" <%= item.status === 'refunded' ? 'disabled' : '' %>><%= labels.refund %></button>
                                                         <button type="button" class="btn btn-outline-danger" data-open-delete-modal="<%= item.id %>"><%= labels.delete %></button>
                                                         <button type="button" class="btn btn-outline-secondary" data-close-editor="edit-<%= item.id %>"><%= labels.cancel %></button>
                                                     </div>
@@ -479,7 +477,6 @@
                 const confirmDeleteButton = document.getElementById("confirmDeleteButton");
                 const shouldShowAnnualAlert = <%- JSON.stringify(Boolean(shouldShowAnnualAlert)) %>;
                 const receiptDirectory = <%- JSON.stringify(receiptDirectory || []) %>;
-                const customerDirectory = <%- JSON.stringify(customerDirectory || []) %>;
                 const requiredFieldMessage = <%- JSON.stringify(labels.requiredField) %>;
                 const duplicateReceiptMessage = <%- JSON.stringify(labels.duplicateReceiptNumber) %>;
                 const paymentReferenceRequiredMessage = <%- JSON.stringify(labels.paymentReferenceRequired) %>;
@@ -522,38 +519,31 @@
 
                 function shouldRequirePaymentReference (paymentMethod) {
                     try {
-                        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer";
+                        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer" || paymentMethod === "cheque";
                     } catch (error) {
                         throw withFunctionError("shouldRequirePaymentReference", error);
                     }
                 }
 
-                function normalizePayerName (value) {
+                function normalizePaidByAutocompleteSelection (rawValue) {
                     try {
-                        return String(value || "").trim().toLowerCase();
+                        const normalizedInput = String(rawValue || "").trim();
+                        const match = /^(.*?)(?:\s*\(CUST-\d+\))$/i.exec(normalizedInput);
+                        if (!match) {
+                            return normalizedInput;
+                        }
+
+                        return String(match[1] || "").trim();
                     } catch (error) {
-                        throw withFunctionError("normalizePayerName", error);
+                        throw withFunctionError("normalizePaidByAutocompleteSelection", error);
                     }
                 }
 
-                function getCustomerIdByPayerName (payerName) {
+                function shouldEnablePaidByAutocomplete (value) {
                     try {
-                        const normalized = normalizePayerName(payerName);
-                        if (!normalized) {
-                            return "";
-                        }
-
-                        const match = customerDirectory.find((entry) => {
-                            if (!entry || typeof entry !== "object") {
-                                return false;
-                            }
-
-                            return normalizePayerName(entry.paidBy) === normalized;
-                        });
-
-                        return match ? String(match.customerId || "").trim() : "";
+                        return String(value || "").trim().length >= 2;
                     } catch (error) {
-                        throw withFunctionError("getCustomerIdByPayerName", error);
+                        throw withFunctionError("shouldEnablePaidByAutocomplete", error);
                     }
                 }
 
@@ -563,26 +553,10 @@
                             return;
                         }
 
-                        const paidByInput = form.querySelector('[name="paidBy"]');
-                        const customerIdInput = form.querySelector('[name="customer_id"]');
                         const paymentMethodSelect = form.querySelector('[name="payment_method"]');
                         const paymentReferenceWrapper = form.querySelector("[data-payment-reference-wrapper]");
                         const paymentReferenceInput = form.querySelector('[name="payment_reference"]');
-
-                        function syncCustomerIdFromPayer () {
-                            try {
-                                if (!paidByInput || !customerIdInput) {
-                                    return;
-                                }
-
-                                const matchedCustomerId = getCustomerIdByPayerName(paidByInput.value);
-                                if (matchedCustomerId) {
-                                    customerIdInput.value = matchedCustomerId;
-                                }
-                            } catch (error) {
-                                throw withFunctionError("syncCustomerIdFromPayer", error);
-                            }
-                        }
+                        const paidByInput = form.querySelector('[name="paidBy"]');
 
                         function updatePaymentReferenceState () {
                             try {
@@ -604,15 +578,32 @@
                             }
                         }
 
-                        if (paidByInput && customerIdInput) {
-                            paidByInput.addEventListener("input", safeHandler(syncCustomerIdFromPayer));
-                            paidByInput.addEventListener("change", safeHandler(syncCustomerIdFromPayer));
-                            syncCustomerIdFromPayer();
-                        }
-
                         if (paymentMethodSelect && paymentReferenceInput) {
                             paymentMethodSelect.addEventListener("change", safeHandler(updatePaymentReferenceState));
                             updatePaymentReferenceState();
+                        }
+
+                        if (paidByInput) {
+                            const knownCustomersListId = paidByInput.getAttribute("list") || "knownCustomersList";
+
+                            const normalizePaidByField = () => {
+                                paidByInput.value = normalizePaidByAutocompleteSelection(paidByInput.value);
+                            };
+
+                            const updatePaidByAutocompleteState = () => {
+                                if (shouldEnablePaidByAutocomplete(paidByInput.value)) {
+                                    paidByInput.setAttribute("list", knownCustomersListId);
+                                } else {
+                                    paidByInput.removeAttribute("list");
+                                }
+                            };
+
+                            paidByInput.addEventListener("change", safeHandler(normalizePaidByField));
+                            paidByInput.addEventListener("blur", safeHandler(normalizePaidByField));
+                            paidByInput.addEventListener("input", safeHandler(updatePaidByAutocompleteState));
+                            paidByInput.addEventListener("focus", safeHandler(updatePaidByAutocompleteState));
+                            normalizePaidByField();
+                            updatePaidByAutocompleteState();
                         }
                     } catch (error) {
                         throw withFunctionError("initializeCustomerAndPaymentFields", error);
@@ -800,10 +791,11 @@
 
                 safeRun(() => {
                     const currentUrl = new URL(window.location.href);
-                    if (currentUrl.searchParams.has("success") || currentUrl.searchParams.has("lang") || currentUrl.searchParams.has("deletedAudit")) {
+                    if (currentUrl.searchParams.has("success") || currentUrl.searchParams.has("lang") || currentUrl.searchParams.has("deletedAudit") || currentUrl.searchParams.has("refundedAudit")) {
                         currentUrl.searchParams.delete("success");
                         currentUrl.searchParams.delete("lang");
                         currentUrl.searchParams.delete("deletedAudit");
+                        currentUrl.searchParams.delete("refundedAudit");
                         const cleanedUrl = `${currentUrl.pathname}${currentUrl.search ? currentUrl.search : ""}${currentUrl.hash}`;
                         window.history.replaceState({}, document.title, cleanedUrl);
                     }
@@ -1014,6 +1006,11 @@
 
                     newTransactionForm.addEventListener("submit", safeHandler((event) => {
                         try {
+                            const paidByField = newTransactionForm.querySelector('[name="paidBy"]');
+                            if (paidByField) {
+                                paidByField.value = normalizePaidByAutocompleteSelection(paidByField.value);
+                            }
+
                             if (newReceiptInput) {
                                 const duplicate = isDuplicateReceipt(newReceiptInput.value);
                                 if (duplicate) {
@@ -1072,6 +1069,11 @@
 
                             form.addEventListener("submit", safeHandler((event) => {
                                 try {
+                                    const paidByField = form.querySelector('[name="paidBy"]');
+                                    if (paidByField) {
+                                        paidByField.value = normalizePaidByAutocompleteSelection(paidByField.value);
+                                    }
+
                                     if (receiptInput) {
                                         const duplicate = isDuplicateReceipt(receiptInput.value, transactionId, originalReceipt);
                                         if (duplicate) {

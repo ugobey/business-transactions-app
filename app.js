@@ -10,8 +10,10 @@ const {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    refundTransactionById,
     readAuditTrail,
     undoDeleteByAuditId,
+    undoRefundByAuditId,
 } = require("./lib/database");
 
 const app = express();
@@ -64,6 +66,7 @@ const TRANSLATIONS = {
         amount: "Amount",
         update: "Update",
         delete: "Delete",
+        refund: "Refund",
         cancel: "Cancel",
         deleteConfirmTitle: "Delete Transaction",
         deleteConfirmBody: "This action will permanently remove the transaction unless you undo it.",
@@ -122,13 +125,20 @@ const TRANSLATIONS = {
         successUpdated: "Transaction updated successfully.",
         successDeleted: "Transaction deleted successfully.",
         successUndoDeleted: "Deleted transaction restored successfully.",
+        successRefunded: "Transaction refunded successfully.",
+        successUndoRefunded: "Refund undo completed successfully.",
         errorTitle: "Error",
         close: "Close",
         unexpectedError: "Something went wrong. Please try again.",
         validationError: "Please provide a receipt number, valid amount, date (today or earlier), purpose, and payer name.",
         updateNotFound: "Could not find that transaction to update.",
         deleteNotFound: "Could not find that transaction to delete.",
+        refundNotAvailable: "Could not refund that transaction.",
         undoDeleteNotAvailable: "This delete action cannot be undone.",
+        undoDeleteDuplicateReceipt: "Cannot undo delete because a transaction with the same receipt number already exists.",
+        undoRefundNotAvailable: "This refund action cannot be undone.",
+        undoRefundDuplicateReceipt: "Cannot undo refund because a transaction with the same receipt number already exists.",
+        refundUndoBody: "This transaction was marked as refunded. You can undo this action.",
         requiredField: "This field is required.",
         noResultsFound: "No results found",
         noResultsDescription: "No transactions match the applied filters.",
@@ -148,7 +158,7 @@ const TRANSLATIONS = {
         paymentReferenceHelp: "Bank ref / transaction ID / check number",
         invalidPaymentMethod: "Please select a valid payment method.",
         invalidStatus: "Please select a valid payment status.",
-        paymentReferenceRequired: "Payment reference is required for credit card and bank transfer payments.",
+        paymentReferenceRequired: "Payment reference is required for all payment methods except cash.",
         customerIdRequired: "Customer ID is required.",
         customerIdMismatch: "Customer ID must match the existing customer record for this payer.",
         customerNameMismatch: "This Customer ID is already linked to a different payer.",
@@ -176,6 +186,7 @@ const TRANSLATIONS = {
         amount: "סכום",
         update: "עדכן",
         delete: "מחק",
+        refund: "החזר",
         cancel: "בטל",
         deleteConfirmTitle: "מחיקת עסקה",
         deleteConfirmBody: "פעולה זו תסיר את העסקה לצמיתות אלא אם תבצעו ביטול.",
@@ -234,13 +245,20 @@ const TRANSLATIONS = {
         successUpdated: "העסקה עודכנה בהצלחה.",
         successDeleted: "העסקה נמחקה בהצלחה.",
         successUndoDeleted: "העסקה שנמחקה שוחזרה בהצלחה.",
+        successRefunded: "העסקה סומנה כהחזר בהצלחה.",
+        successUndoRefunded: "ביטול ההחזר בוצע בהצלחה.",
         errorTitle: "שגיאה",
         close: "סגור",
         unexpectedError: "משהו השתבש. נא לנסות שוב.",
         validationError: "נא להזין מספר קבלה, סכום ותאריך תקינים (היום או קודם), מטרה ושם משלם.",
         updateNotFound: "לא נמצאה עסקה לעדכון.",
         deleteNotFound: "לא נמצאה עסקה למחיקה.",
+        refundNotAvailable: "לא ניתן לבצע החזר לעסקה זו.",
         undoDeleteNotAvailable: "לא ניתן לשחזר את פעולת המחיקה הזו.",
+        undoDeleteDuplicateReceipt: "לא ניתן לבטל מחיקה כי קיימת עסקה עם אותו מספר קבלה.",
+        undoRefundNotAvailable: "לא ניתן לבטל את פעולת ההחזר הזו.",
+        undoRefundDuplicateReceipt: "לא ניתן לבטל החזר כי קיימת עסקה עם אותו מספר קבלה.",
+        refundUndoBody: "העסקה סומנה כהחזר. ניתן לבטל את הפעולה.",
         requiredField: "שדה זה הוא חובה.",
         noResultsFound: "לא נמצאו תוצאות",
         noResultsDescription: "אין עסקאות התואמות לסינונים שהוחלו.",
@@ -260,7 +278,7 @@ const TRANSLATIONS = {
         paymentReferenceHelp: "אסמכתא בנקאית / מזהה עסקה / מספר צ'ק",
         invalidPaymentMethod: "נא לבחור אמצעי תשלום תקין.",
         invalidStatus: "נא לבחור סטטוס תשלום תקין.",
-        paymentReferenceRequired: "נדרש להזין אסמכתא לתשלומי כרטיס אשראי והעברה בנקאית.",
+        paymentReferenceRequired: "נדרש להזין אסמכתא לכל אמצעי תשלום מלבד מזומן.",
         customerIdRequired: "נדרש מזהה לקוח.",
         customerIdMismatch: "מזהה הלקוח חייב להתאים לרשומת הלקוח הקיימת עבור משלם זה.",
         customerNameMismatch: "מזהה לקוח זה כבר משויך למשלם אחר.",
@@ -360,7 +378,7 @@ function normalizeStatus(value) {
 
 function shouldRequirePaymentReference(paymentMethod) {
     try {
-        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer";
+        return paymentMethod === "credit_card" || paymentMethod === "bank_transfer" || paymentMethod === "cheque";
     } catch (error) {
         throw withFunctionError("shouldRequirePaymentReference", error);
     }
@@ -398,46 +416,78 @@ function buildCustomerMaps(transactions, excludeId = "") {
     }
 }
 
-function resolveCustomerIdForPayer({
-    transactions,
-    paidBy,
-    customerId,
-    excludeId = "",
-}) {
+function parsePaidByAutocompleteValue(rawPaidBy) {
     try {
-        const normalizedPayer = String(paidBy || "").trim().toLowerCase();
-        const normalizedCustomerId = String(customerId || "").trim();
-        const { customerIdByPayer, payerByCustomerId } = buildCustomerMaps(transactions, excludeId);
+        const normalizedInput = String(rawPaidBy || "").trim();
+        const match = /^(.*?)(?:\s*\((CUST-\d+)\))$/i.exec(normalizedInput);
 
-        if (!normalizedCustomerId) {
+        if (!match) {
             return {
-                isValid: false,
-                resolvedCustomerId: "",
-                errorKey: "customerIdRequired",
-            };
-        }
-
-        const existingCustomerId = customerIdByPayer.get(normalizedPayer) || "";
-        if (existingCustomerId && existingCustomerId !== normalizedCustomerId) {
-            return {
-                isValid: false,
-                resolvedCustomerId: normalizedCustomerId,
-                errorKey: "customerIdMismatch",
-            };
-        }
-
-        const existingPayerForCustomerId = payerByCustomerId.get(normalizedCustomerId) || "";
-        if (existingPayerForCustomerId && existingPayerForCustomerId !== normalizedPayer) {
-            return {
-                isValid: false,
-                resolvedCustomerId: normalizedCustomerId,
-                errorKey: "customerNameMismatch",
+                payerName: normalizedInput,
+                hintedCustomerId: "",
             };
         }
 
         return {
+            payerName: String(match[1] || "").trim(),
+            hintedCustomerId: String(match[2] || "").trim().toUpperCase(),
+        };
+    } catch (error) {
+        throw withFunctionError("parsePaidByAutocompleteValue", error);
+    }
+}
+
+function generateNextCustomerId(transactions, excludeId = "") {
+    try {
+        let maxIdNumber = 0;
+
+        transactions.forEach((item) => {
+            if (excludeId && item.id === excludeId) {
+                return;
+            }
+
+            const customerId = String(item.customer_id || "").trim();
+            const match = /^CUST-(\d+)$/i.exec(customerId);
+            if (!match) {
+                return;
+            }
+
+            const idNumber = Number.parseInt(match[1], 10);
+            if (Number.isFinite(idNumber) && idNumber > maxIdNumber) {
+                maxIdNumber = idNumber;
+            }
+        });
+
+        return `CUST-${String(maxIdNumber + 1).padStart(4, "0")}`;
+    } catch (error) {
+        throw withFunctionError("generateNextCustomerId", error);
+    }
+}
+
+function resolveCustomerIdForPayer({
+    transactions,
+    paidBy,
+    hintedCustomerId = "",
+    excludeId = "",
+}) {
+    try {
+        const normalizedPayer = String(paidBy || "").trim().toLowerCase();
+        const normalizedHintedCustomerId = String(hintedCustomerId || "").trim().toUpperCase();
+        const { customerIdByPayer, payerByCustomerId } = buildCustomerMaps(transactions, excludeId);
+        let existingCustomerId = customerIdByPayer.get(normalizedPayer) || "";
+
+        if (normalizedHintedCustomerId) {
+            const hintPayerName = payerByCustomerId.get(normalizedHintedCustomerId) || "";
+            if (!hintPayerName || hintPayerName === normalizedPayer) {
+                existingCustomerId = normalizedHintedCustomerId;
+            }
+        }
+
+        const resolvedCustomerId = existingCustomerId || generateNextCustomerId(transactions, excludeId);
+
+        return {
             isValid: true,
-            resolvedCustomerId: existingCustomerId || normalizedCustomerId,
+            resolvedCustomerId,
             errorKey: "",
         };
     } catch (error) {
@@ -629,7 +679,7 @@ function applyFilters(transactions, filters) {
     }
 }
 
-function buildIndexPath({ success, page, filters, deletedAuditId } = {}) {
+function buildIndexPath({ success, page, filters, deletedAuditId, refundedAuditId } = {}) {
     try {
         const params = new URLSearchParams();
 
@@ -639,6 +689,10 @@ function buildIndexPath({ success, page, filters, deletedAuditId } = {}) {
 
         if (deletedAuditId) {
             params.set("deletedAudit", String(deletedAuditId));
+        }
+
+        if (refundedAuditId) {
+            params.set("refundedAudit", String(refundedAuditId));
         }
 
         if (page && Number(page) > 1) {
@@ -688,6 +742,17 @@ function formatLabelTemplate(template, values = {}) {
     }
 }
 
+function getSignedTransactionAmount(transaction) {
+    try {
+        const rawAmount = Number(transaction?.amount || 0);
+        const safeAmount = Number.isFinite(rawAmount) ? rawAmount : 0;
+        const isRefunded = String(transaction?.status || "").toLowerCase() === "refunded" || Boolean(transaction?.is_refund);
+        return isRefunded ? -Math.abs(safeAmount) : safeAmount;
+    } catch (error) {
+        throw withFunctionError("getSignedTransactionAmount", error);
+    }
+}
+
 function getTransactionYear(transaction) {
     try {
         const dateValue = String(transaction?.date || "").trim();
@@ -711,7 +776,7 @@ function calculateAnnualThresholdStatus(transactions, settings, labels, lang) {
         const currentYear = String(new Date().getFullYear());
         const annualTotal = transactions
             .filter((item) => getTransactionYear(item) === currentYear)
-            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+            .reduce((sum, item) => sum + getSignedTransactionAmount(item), 0);
 
         const threshold = Number(settings.annualTotalThreshold);
         const alertPercent = Number(settings.annualAlertPercent);
@@ -772,7 +837,7 @@ function calculateStatistics(transactions, lang, labels) {
         const locale = lang === "he" ? "he-IL" : "en-US";
         const formatter = new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" });
         const numericAmounts = transactions
-            .map((item) => Number(item.amount || 0))
+            .map((item) => getSignedTransactionAmount(item))
             .filter((value) => Number.isFinite(value));
         const totalRevenue = numericAmounts.reduce((sum, value) => sum + value, 0);
         const totalTransactions = transactions.length;
@@ -798,7 +863,7 @@ function calculateStatistics(transactions, lang, labels) {
         let annualCurrentYearTotal = 0;
 
         transactions.forEach((item) => {
-            const amount = Number(item.amount || 0);
+            const amount = getSignedTransactionAmount(item);
             if (!Number.isFinite(amount)) {
                 return;
             }
@@ -884,7 +949,7 @@ function getAuditReceiptNumber(entry, entriesById = new Map()) {
             return String(directReceiptNumber);
         }
 
-        if (entry?.action === "undo_delete") {
+        if (entry?.action === "undo_delete" || entry?.action === "undo_refund") {
             const sourceAuditId = String(entry?.payload?.sourceAuditId || "").trim();
             if (!sourceAuditId) {
                 return "";
@@ -904,6 +969,37 @@ function getAuditReceiptNumber(entry, entriesById = new Map()) {
     }
 }
 
+function getAuditCustomerId(entry, entriesById = new Map()) {
+    try {
+        const directCustomerId = entry?.payload?.transaction?.customer_id
+            || entry?.payload?.after?.customer_id
+            || entry?.payload?.before?.customer_id
+            || entry?.payload?.customer_id;
+
+        if (directCustomerId !== undefined && directCustomerId !== null && String(directCustomerId).trim() !== "") {
+            return String(directCustomerId);
+        }
+
+        if (entry?.action === "undo_delete" || entry?.action === "undo_refund") {
+            const sourceAuditId = String(entry?.payload?.sourceAuditId || "").trim();
+            if (!sourceAuditId) {
+                return "";
+            }
+
+            const sourceEntry = entriesById.get(sourceAuditId);
+            if (!sourceEntry) {
+                return "";
+            }
+
+            return getAuditCustomerId(sourceEntry, entriesById);
+        }
+
+        return "";
+    } catch (error) {
+        throw withFunctionError("getAuditCustomerId", error);
+    }
+}
+
 async function renderIndex(res, options = {}) {
     try {
         const lang = getLanguage(options.lang);
@@ -915,7 +1011,7 @@ async function renderIndex(res, options = {}) {
             .sort((a, b) => b.localeCompare(a));
         const filters = normalizeFilters(options.filters);
         const filteredTransactions = applyFilters(allTransactions, filters);
-        const totalRevenue = allTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const totalRevenue = allTransactions.reduce((sum, item) => sum + getSignedTransactionAmount(item), 0);
         const maxDate = getTodayDateString();
         const totalTransactions = filteredTransactions.length;
         const totalPages = Math.max(1, Math.ceil(totalTransactions / PAGE_SIZE));
@@ -949,26 +1045,30 @@ async function renderIndex(res, options = {}) {
                 paidBy: "",
                 payment_method: "cash",
                 payment_reference: "",
-                customer_id: "",
                 status: "paid",
-                is_refund: false,
                 notes: "",
-                attachment_path: "",
             },
             error: options.error || null,
             successMessage: options.successMessage || null,
             undoDeleteAuditId: options.undoDeleteAuditId || null,
+            undoRefundAuditId: options.undoRefundAuditId || null,
             settings,
             receiptDirectory: allTransactions.map((item) => ({
                 id: item.id,
                 receiptNumber: item.receiptNumber || "",
             })),
-            customerDirectory: allTransactions
-                .map((item) => ({
-                    paidBy: String(item.paidBy || "").trim(),
-                    customerId: String(item.customer_id || "").trim(),
-                }))
-                .filter((entry) => entry.paidBy && entry.customerId),
+            customerDirectory: Array.from(new Map(
+                allTransactions
+                    .map((item) => ({
+                        paidBy: String(item.paidBy || "").trim(),
+                        customerId: String(item.customer_id || "").trim(),
+                    }))
+                    .filter((entry) => entry.paidBy && entry.customerId)
+                    .map((entry) => [
+                        `${entry.paidBy.toLowerCase()}::${entry.customerId.toUpperCase()}`,
+                        entry,
+                    ]),
+            ).values()),
             ...annualThresholdStatus,
         });
     } catch (error) {
@@ -983,6 +1083,7 @@ app.get("/", async (req, res, next) => {
         const page = parsePage(req.query.page);
         const filters = resolveQueryFilters(req.query);
         const deletedAudit = String(req.query.deletedAudit || "").trim();
+        const refundedAudit = String(req.query.refundedAudit || "").trim();
         const successCode = req.query.success;
         const successMessage = successCode === "1"
             ? labels.successSaved
@@ -994,6 +1095,10 @@ app.get("/", async (req, res, next) => {
                         ? labels.successUndoDeleted
                         : successCode === "5"
                             ? labels.successSettingsSaved
+                            : successCode === "6"
+                                ? labels.successRefunded
+                                : successCode === "7"
+                                    ? labels.successUndoRefunded
                 : null;
 
         await renderIndex(res, {
@@ -1002,6 +1107,7 @@ app.get("/", async (req, res, next) => {
             filters,
             successMessage,
             undoDeleteAuditId: successCode === "3" ? deletedAudit : null,
+            undoRefundAuditId: successCode === "6" ? refundedAudit : null,
         });
     } catch (error) {
         next(withFunctionError("app.get /", error));
@@ -1040,11 +1146,8 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
             paidBy: req.body.paidBy,
             payment_method: req.body.payment_method,
             payment_reference: req.body.payment_reference,
-            customer_id: req.body.customer_id,
             status: req.body.status,
-            is_refund: Boolean(req.body.is_refund),
             notes: req.body.notes,
-            attachment_path: req.body.attachment_path,
         };
 
         const amount = Number(formData.amount);
@@ -1052,19 +1155,17 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
         const paymentMethod = normalizePaymentMethod(formData.payment_method);
         const paymentReference = String(formData.payment_reference || "").trim();
         const status = normalizeStatus(formData.status);
-        const paidBy = String(formData.paidBy || "").trim();
-        const customerId = String(formData.customer_id || "").trim();
+        const parsedPaidBy = parsePaidByAutocompleteValue(formData.paidBy);
+        const paidBy = parsedPaidBy.payerName;
         const notes = String(formData.notes || "").trim();
-        const attachmentPathInput = String(formData.attachment_path || "").trim();
-        const uploadedAttachmentPath = req.file ? `/uploads/${req.file.filename}` : "";
-        const attachmentPath = uploadedAttachmentPath || attachmentPathInput;
+        const attachmentPath = req.file ? `/uploads/${req.file.filename}` : "";
         const customerResolution = resolveCustomerIdForPayer({
             transactions: allTransactions,
             paidBy,
-            customerId,
+            hintedCustomerId: parsedPaidBy.hintedCustomerId,
         });
 
-        if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !formData.paidBy?.trim()) {
+        if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !paidBy) {
             return await renderIndex(res, {
                 lang,
                 statusCode: 400,
@@ -1072,11 +1173,8 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
                     ...formData,
                     payment_method: paymentMethod || "cash",
                     payment_reference: paymentReference,
-                    customer_id: customerId,
                     status: status || "paid",
-                    is_refund: Boolean(formData.is_refund),
                     notes,
-                    attachment_path: attachmentPath,
                 },
                 error: labels.validationError,
             });
@@ -1089,10 +1187,8 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
                 formData: {
                     ...formData,
                     payment_reference: paymentReference,
-                    customer_id: customerId,
                     status: status || "paid",
                     notes,
-                    attachment_path: attachmentPath,
                 },
                 error: labels.invalidPaymentMethod,
             });
@@ -1106,9 +1202,7 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
                     ...formData,
                     payment_method: paymentMethod,
                     payment_reference: paymentReference,
-                    customer_id: customerId,
                     notes,
-                    attachment_path: attachmentPath,
                 },
                 error: labels.invalidStatus,
             });
@@ -1122,28 +1216,9 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
                     ...formData,
                     payment_method: paymentMethod,
                     status,
-                    customer_id: customerId,
                     notes,
-                    attachment_path: attachmentPath,
                 },
                 error: labels.paymentReferenceRequired,
-            });
-        }
-
-        if (!customerResolution.isValid) {
-            return await renderIndex(res, {
-                lang,
-                statusCode: 400,
-                formData: {
-                    ...formData,
-                    payment_method: paymentMethod,
-                    payment_reference: paymentReference,
-                    status,
-                    customer_id: customerId,
-                    notes,
-                    attachment_path: attachmentPath,
-                },
-                error: labels[customerResolution.errorKey] || labels.customerIdRequired,
             });
         }
 
@@ -1158,7 +1233,6 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
                     status,
                     customer_id: customerResolution.resolvedCustomerId,
                     notes,
-                    attachment_path: attachmentPath,
                 },
                 error: labels.duplicateReceiptNumber,
             });
@@ -1174,7 +1248,7 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
             payment_reference: paymentReference,
             customer_id: customerResolution.resolvedCustomerId,
             status,
-            is_refund: Boolean(formData.is_refund),
+            is_refund: status === "refunded",
             notes,
             attachment_path: attachmentPath,
         });
@@ -1236,11 +1310,8 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             paidBy: req.body.paidBy,
             payment_method: req.body.payment_method,
             payment_reference: req.body.payment_reference,
-            customer_id: req.body.customer_id,
             status: req.body.status,
-            is_refund: Boolean(req.body.is_refund),
             notes: req.body.notes,
-            attachment_path: req.body.attachment_path,
             existing_attachment_path: req.body.existing_attachment_path,
         };
 
@@ -1249,21 +1320,20 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
         const paymentMethod = normalizePaymentMethod(formData.payment_method);
         const paymentReference = String(formData.payment_reference || "").trim();
         const status = normalizeStatus(formData.status);
-        const paidBy = String(formData.paidBy || "").trim();
-        const customerId = String(formData.customer_id || "").trim();
+        const parsedPaidBy = parsePaidByAutocompleteValue(formData.paidBy);
+        const paidBy = parsedPaidBy.payerName;
         const notes = String(formData.notes || "").trim();
         const uploadedAttachmentPath = req.file ? `/uploads/${req.file.filename}` : "";
-        const attachmentPathInput = String(formData.attachment_path || "").trim();
         const existingAttachmentPath = String(formData.existing_attachment_path || "").trim();
-        const attachmentPath = uploadedAttachmentPath || attachmentPathInput || existingAttachmentPath;
+        const attachmentPath = uploadedAttachmentPath || existingAttachmentPath;
         const customerResolution = resolveCustomerIdForPayer({
             transactions: allTransactions,
             paidBy,
-            customerId,
+            hintedCustomerId: parsedPaidBy.hintedCustomerId,
             excludeId: req.params.id,
         });
 
-        if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !formData.paidBy?.trim()) {
+        if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !paidBy) {
             return await renderIndex(res, {
                 lang,
                 page,
@@ -1303,16 +1373,6 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             });
         }
 
-        if (!customerResolution.isValid) {
-            return await renderIndex(res, {
-                lang,
-                page,
-                filters,
-                statusCode: 400,
-                error: labels[customerResolution.errorKey] || labels.customerIdRequired,
-            });
-        }
-
         if (hasDuplicateReceiptNumber(allTransactions, formData.receiptNumber, req.params.id)) {
             return await renderIndex(res, {
                 lang,
@@ -1333,7 +1393,7 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             payment_reference: paymentReference,
             customer_id: customerResolution.resolvedCustomerId,
             status,
-            is_refund: Boolean(formData.is_refund),
+            is_refund: status === "refunded",
             notes,
             attachment_path: attachmentPath,
         });
@@ -1383,6 +1443,35 @@ app.post("/transactions/:id/delete", async (req, res, next) => {
     }
 });
 
+app.post("/transactions/:id/refund", async (req, res, next) => {
+    try {
+        const lang = resolveLanguage(req);
+        const labels = TRANSLATIONS[lang];
+        const page = parsePage(req.body.page);
+        const filters = resolveBodyFilters(req.body);
+
+        const refunded = await refundTransactionById(req.params.id);
+        if (!refunded?.refunded) {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels.refundNotAvailable,
+            });
+        }
+
+        return res.redirect(buildIndexPath({
+            success: 6,
+            page,
+            filters,
+            refundedAuditId: refunded.auditEntryId,
+        }));
+    } catch (error) {
+        return next(withFunctionError("app.post /transactions/:id/refund", error));
+    }
+});
+
 app.post("/audit/:auditId/undo-delete", async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
@@ -1392,12 +1481,16 @@ app.post("/audit/:auditId/undo-delete", async (req, res, next) => {
 
         const result = await undoDeleteByAuditId(req.params.auditId);
         if (!result.restored) {
+            const undoDeleteError = result.reason === "duplicate-receipt-number"
+                ? labels.undoDeleteDuplicateReceipt
+                : labels.undoDeleteNotAvailable;
+
             return await renderIndex(res, {
                 lang,
                 page,
                 filters,
                 statusCode: 400,
-                error: labels.undoDeleteNotAvailable,
+                error: undoDeleteError,
             });
         }
 
@@ -1407,18 +1500,61 @@ app.post("/audit/:auditId/undo-delete", async (req, res, next) => {
     }
 });
 
+app.post("/audit/:auditId/undo-refund", async (req, res, next) => {
+    try {
+        const lang = resolveLanguage(req);
+        const labels = TRANSLATIONS[lang];
+        const page = parsePage(req.body.page);
+        const filters = resolveBodyFilters(req.body);
+
+        const result = await undoRefundByAuditId(req.params.auditId);
+        if (!result.restored) {
+            const undoRefundError = result.reason === "duplicate-receipt-number"
+                ? labels.undoRefundDuplicateReceipt
+                : labels.undoRefundNotAvailable;
+
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: undoRefundError,
+            });
+        }
+
+        return res.redirect(buildIndexPath({ success: 7, page, filters }));
+    } catch (error) {
+        return next(withFunctionError("app.post /audit/:auditId/undo-refund", error));
+    }
+});
+
 app.get("/admin/audit", async (req, res, next) => {
     try {
         const lang = resolveLanguage(req);
         const labels = TRANSLATIONS[lang];
         const successCode = req.query.success;
-        const successMessage = successCode === "1" ? labels.successUndoDeleted : null;
+        const errorCode = String(req.query.error || "").trim();
+        const successMessage = successCode === "1"
+            ? labels.successUndoDeleted
+            : successCode === "2"
+                ? labels.successUndoRefunded
+                : null;
+        const errorMessage = errorCode === "undo-delete-duplicate-receipt"
+            ? labels.undoDeleteDuplicateReceipt
+            : errorCode === "undo-refund-duplicate-receipt"
+                ? labels.undoRefundDuplicateReceipt
+                : errorCode === "undo-delete-not-available"
+                    ? labels.undoDeleteNotAvailable
+                    : errorCode === "undo-refund-not-available"
+                        ? labels.undoRefundNotAvailable
+                        : "";
 
         const entries = await readAuditTrail();
         const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
         const entriesWithReceipt = entries.map((entry) => ({
             ...entry,
             auditReceiptNumber: getAuditReceiptNumber(entry, entriesById),
+            auditCustomerId: getAuditCustomerId(entry, entriesById),
         }));
 
         return res.status(200).render("admin-audit", {
@@ -1427,6 +1563,7 @@ app.get("/admin/audit", async (req, res, next) => {
             labels,
             entries: entriesWithReceipt,
             successMessage,
+            errorMessage,
             stringifyAuditDetails,
         });
     } catch (error) {
@@ -1438,12 +1575,31 @@ app.post("/admin/audit/:auditId/undo-delete", async (req, res, next) => {
     try {
         const result = await undoDeleteByAuditId(req.params.auditId);
         if (!result.restored) {
-            return res.redirect("/admin/audit");
+            const errorCode = result.reason === "duplicate-receipt-number"
+                ? "undo-delete-duplicate-receipt"
+                : "undo-delete-not-available";
+            return res.redirect(`/admin/audit?error=${encodeURIComponent(errorCode)}`);
         }
 
         return res.redirect("/admin/audit?success=1");
     } catch (error) {
         return next(withFunctionError("app.post /admin/audit/:auditId/undo-delete", error));
+    }
+});
+
+app.post("/admin/audit/:auditId/undo-refund", async (req, res, next) => {
+    try {
+        const result = await undoRefundByAuditId(req.params.auditId);
+        if (!result.restored) {
+            const errorCode = result.reason === "duplicate-receipt-number"
+                ? "undo-refund-duplicate-receipt"
+                : "undo-refund-not-available";
+            return res.redirect(`/admin/audit?error=${encodeURIComponent(errorCode)}`);
+        }
+
+        return res.redirect("/admin/audit?success=2");
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/audit/:auditId/undo-refund", error));
     }
 });
 
@@ -1486,11 +1642,8 @@ app.use(async (error, req, res, next) => {
                 paidBy: req.body?.paidBy || "",
                 payment_method: req.body?.payment_method || "cash",
                 payment_reference: req.body?.payment_reference || "",
-                customer_id: req.body?.customer_id || "",
                 status: req.body?.status || "paid",
-                is_refund: Boolean(req.body?.is_refund),
                 notes: req.body?.notes || "",
-                attachment_path: req.body?.attachment_path || (req.file ? `/uploads/${req.file.filename}` : ""),
             }
             : undefined;
 

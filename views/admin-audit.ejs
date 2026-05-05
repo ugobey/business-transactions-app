@@ -37,9 +37,9 @@
                     <% if (entries.length === 0) { %>
                     <p class="text-secondary mb-0"><%= labels.noAuditEntries %></p>
                     <% } else { %>
-                    <% const hasUndoableDelete = entries.some((entry) => entry.action === 'delete' && !entry.undo?.restoredAt); %>
-                    <% if (!hasUndoableDelete) { %>
-                    <div class="alert alert-info" role="alert">No undoable delete actions are currently available.</div>
+                    <% const hasUndoableAction = entries.some((entry) => (entry.action === 'delete' || entry.action === 'refund') && !entry.undo?.restoredAt); %>
+                    <% if (!hasUndoableAction) { %>
+                    <div class="alert alert-info" role="alert">No undoable actions are currently available.</div>
                     <% } %>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -49,6 +49,7 @@
                                     <th><%= labels.action %></th>
                                     <th><%= labels.transactionId %></th>
                                     <th><%= labels.receiptNumber %></th>
+                                    <th><%= labels.customerId %></th>
                                     <th><%= labels.details %></th>
                                     <th class="text-end"><%= labels.undo %></th>
                                 </tr>
@@ -60,12 +61,21 @@
                                     <td><span class="badge text-bg-light"><%= entry.action %></span></td>
                                     <td><%= entry.payload?.transactionId || entry.payload?.after?.id || entry.payload?.before?.id || entry.payload?.transaction?.id || '' %></td>
                                     <td><%= entry.auditReceiptNumber || '-' %></td>
+                                    <td><%= entry.auditCustomerId || '-' %></td>
                                     <td class="small text-secondary"><%= stringifyAuditDetails(entry.payload || {}) %></td>
                                     <td class="text-end">
                                         <% if (entry.action === 'delete') { %>
                                         <% if (!entry.undo?.restoredAt) { %>
                                         <form action="/admin/audit/<%= entry.id %>/undo-delete" method="POST" class="d-inline">
                                             <button type="submit" class="btn btn-sm btn-outline-primary"><%= labels.undoFromAudit %></button>
+                                        </form>
+                                        <% } else { %>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled><%= labels.undoUnavailable %></button>
+                                        <% } %>
+                                        <% } else if (entry.action === 'refund') { %>
+                                        <% if (!entry.undo?.restoredAt) { %>
+                                        <form action="/admin/audit/<%= entry.id %>/undo-refund" method="POST" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"><%= labels.undo %></button>
                                         </form>
                                         <% } else { %>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" disabled><%= labels.undoUnavailable %></button>
@@ -82,8 +92,30 @@
             </div>
         </main>
 
+        <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="errorModalLabel"><%= labels.errorTitle %></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body" id="errorModalMessage"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
         <script>
             (() => {
+                const initialErrorMessage = <%- JSON.stringify(errorMessage || "") %>;
+                const fallbackErrorMessage = <%- JSON.stringify(labels.unexpectedError) %>;
+                const errorModalElement = document.getElementById("errorModal");
+                const errorModalMessageElement = document.getElementById("errorModalMessage");
+                const errorModal = errorModalElement ? new bootstrap.Modal(errorModalElement) : null;
                 const locale = document.documentElement.lang === "he" ? "he-IL" : "en-US";
                 const formatter = new Intl.DateTimeFormat(locale, {
                     year: "numeric",
@@ -108,6 +140,11 @@
                     element.textContent = formatter.format(parsed);
                     element.title = `${parsed.toLocaleString(locale)} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
                 });
+
+                if (initialErrorMessage && errorModal && errorModalMessageElement) {
+                    errorModalMessageElement.textContent = initialErrorMessage || fallbackErrorMessage;
+                    errorModal.show();
+                }
             })();
         </script>
     </body>

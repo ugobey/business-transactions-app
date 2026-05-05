@@ -516,7 +516,7 @@
                         <div id="restoreInfoSection" class="d-none mb-3">
                             <div class="small fw-semibold mb-2">Select a backup to restore:</div>
                             <div id="restoreBackupList" class="vstack gap-1"></div>
-                            <button type="button" class="btn btn-sm btn-outline-primary mt-2 d-none" id="restoreSelectedButton"><%= labels.restoreFromDrive || 'Restore from Drive' %></button>
+                            <button type="button" class="btn btn-sm btn-danger mt-2 d-none" id="restoreSelectedButton"><%= labels.restoreFromDrive || 'Restore from Drive' %></button>
                         </div>
                         <div id="restoreConfirmSection" class="d-none alert alert-warning">
                             <p class="mb-1 small fw-semibold">Restore from: <span id="restoreSelectedName" class="fw-normal"></span></p>
@@ -623,17 +623,39 @@
                 let pendingReplaceReceiptForm = null;
                 let pendingReplaceReceiptSubmitter = null;
 
+                function setBackupNowButtonVariant (isSecondary) {
+                    if (!backupNowButton) {
+                        return;
+                    }
+
+                    backupNowButton.classList.toggle("btn-secondary", isSecondary);
+                    backupNowButton.classList.toggle("btn-primary", !isSecondary);
+                }
+
                 async function refreshBackupAuthState () {
                     try {
                         const res = await fetch("/admin/backup/status");
                         const data = await res.json();
                         const authorized = data.configured && data.authorized;
+                        let hasBackups = false;
+
+                        if (authorized) {
+                            try {
+                                const backupsRes = await fetch("/admin/restore/backups");
+                                const backupsData = await backupsRes.json();
+                                hasBackups = Boolean(backupsData.success && Array.isArray(backupsData.files) && backupsData.files.length > 0);
+                            } catch {
+                                hasBackups = false;
+                            }
+                        }
+
                         backupAuthSection.classList.toggle("d-none", authorized);
                         backupConnectedSection.classList.toggle("d-none", !authorized);
                         backupNowButton.classList.toggle("d-none", !authorized);
                         backupDisconnectButton.classList.toggle("d-none", !authorized);
-                        restoreFromDriveButton.classList.toggle("d-none", !authorized);
+                        restoreFromDriveButton.classList.toggle("d-none", !authorized || !hasBackups);
                         restoreInfoSection.classList.add("d-none");
+                        setBackupNowButtonVariant(false);
                     } catch {
                         backupAuthSection.classList.remove("d-none");
                         backupConnectedSection.classList.add("d-none");
@@ -641,11 +663,13 @@
                         backupDisconnectButton.classList.add("d-none");
                         restoreFromDriveButton.classList.add("d-none");
                         restoreInfoSection.classList.add("d-none");
+                        setBackupNowButtonVariant(false);
                     }
                 }
 
                 async function loadBackupList () {
                     try {
+                        setBackupNowButtonVariant(true);
                         restoreBackupList.innerHTML = '<div class="text-muted small">Loading backups...</div>';
                         restoreInfoSection.classList.remove("d-none");
                         const res = await fetch("/admin/restore/backups");
@@ -685,6 +709,7 @@
                         });
                         if (restoreSelectedButton) restoreSelectedButton.classList.remove("d-none");
                     } catch {
+                        setBackupNowButtonVariant(false);
                         restoreInfoSection.classList.add("d-none");
                     }
                 }
@@ -1318,10 +1343,11 @@
                 safeRun(() => {
                     if (openBackupModalButton && backupModal) {
                         openBackupModalButton.addEventListener("click", safeHandler(async () => {
-                            backupStatus.innerHTML = "";
+                            backupStatus.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Checking Google Drive status and backups...</div>';
                             backupResults.innerHTML = "";
                             backupModal.show();
                             await refreshBackupAuthState();
+                            backupStatus.innerHTML = "";
                         }));
                     }
                 });
@@ -1346,6 +1372,7 @@
 
                     if (backupNowButton) {
                         backupNowButton.addEventListener("click", safeHandler(async () => {
+                            let shouldHideBackupNowButton = false;
                             try {
                                 const renderBackupProgress = (job) => {
                                     const safePercent = Math.max(0, Math.min(100, Number(job.percent || 0)));
@@ -1390,6 +1417,7 @@
 
                                         if (job.status === "completed") {
                                             backupStatus.innerHTML = `<div class="alert alert-success mb-0"><strong>✓ Success!</strong> Backup completed successfully.</div>`;
+                                            shouldHideBackupNowButton = true;
                                             if (job.result && job.result.files) {
                                                 const filesList = job.result.files.map((f) => f.name).join(", ");
                                                 const cleanupStatus = job.result.zipDeleted
@@ -1418,6 +1446,9 @@
                                 backupStatus.innerHTML = `<div class="alert alert-danger mb-0"><strong>✗ Error:</strong> ${fetchError.message}</div>`;
                             } finally {
                                 backupNowButton.disabled = false;
+                                if (shouldHideBackupNowButton) {
+                                    backupNowButton.classList.add("d-none");
+                                }
                             }
                         }));
                     }

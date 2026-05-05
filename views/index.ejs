@@ -89,6 +89,12 @@
                                 <% }) %>
                             </datalist>
 
+                            <datalist id="knownPurposesList">
+                                <% purposeDirectory.forEach((purposeEntry) => { %>
+                                <option value="<%= purposeEntry %>"></option>
+                                <% }) %>
+                            </datalist>
+
                             <form action="/transactions" method="POST" enctype="multipart/form-data" class="vstack gap-3" novalidate>
                                 <div>
                                     <label for="receiptNumber" class="form-label fw-semibold"><%= labels.receiptNumber %></label>
@@ -113,7 +119,7 @@
 
                                 <div>
                                     <label for="purpose" class="form-label fw-semibold"><%= labels.whatItWasFor %></label>
-                                    <input id="purpose" name="purpose" type="text" maxlength="120" placeholder="Website design retainer" value="<%= formData.purpose %>" class="form-control" required />
+                                    <input id="purpose" name="purpose" type="text" maxlength="120" placeholder="Website design retainer" value="<%= formData.purpose %>" class="form-control" list="knownPurposesList" autocomplete="off" required />
                                     <div class="invalid-feedback"><%= labels.requiredField %></div>
                                 </div>
 
@@ -156,7 +162,7 @@
 
                                 <div>
                                     <label for="attachment_upload" class="form-label fw-semibold"><%= labels.attachmentUpload %></label>
-                                    <input id="attachment_upload" name="attachment_upload" type="file" class="form-control" />
+                                    <input id="attachment_upload" name="attachment_upload" type="file" class="form-control" accept="image/*,application/pdf" />
                                     <div class="invalid-feedback"><%= labels.requiredField %></div>
                                 </div>
 
@@ -227,7 +233,8 @@
                                         <% } else { %>
                                         <% transactions.forEach((item) => { %>
                                         <% const isRefunded = item.status === 'refunded' || item.is_refund; %>
-                                        <tr class="ledger-view-row <%= isRefunded ? 'table-secondary text-secondary' : '' %>" data-item-id="<%= item.id %>" <% if (!isRefunded) { %>data-open-editor="edit-<%= item.id %>"<% } %>>
+                                        <% const isPending = item.status === 'pending'; %>
+                                        <tr class="ledger-view-row <%= isRefunded ? 'table-secondary text-secondary' : '' %> <%= (!isRefunded && isPending) ? 'ledger-row-pending' : '' %>" data-item-id="<%= item.id %>" <% if (!isRefunded) { %>data-open-editor="edit-<%= item.id %>"<% } %>>
                                             <td class="<%= isRefunded ? 'col-receipt' : 'editable-cell col-receipt' %>"><%= item.receiptNumber %></td>
                                             <td class="<%= isRefunded ? 'col-date' : 'editable-cell col-date' %>"><%= item.date %></td>
                                             <td class="<%= isRefunded ? '' : 'editable-cell' %>"><%= item.paidBy %></td>
@@ -235,7 +242,7 @@
                                             <td class="<%= isRefunded ? '' : 'editable-cell' %>"><%= item.purpose %></td>
                                             <td class="text-end fw-semibold <%= isRefunded ? '' : 'editable-cell' %>"><%= formatCurrency(item.amount) %></td>
                                             <td class="text-end">
-                                                <% if (!isRefunded) { %>
+                                                <% if (!isRefunded && !isPending) { %>
                                                 <form action="/transactions/<%= item.id %>/refund" method="POST" class="d-inline">
                                                     <input type="hidden" name="page" value="<%= currentPage %>" />
                                                     <input type="hidden" name="fReceiptNumber" value="<%= filters.receiptNumber %>" />
@@ -274,7 +281,7 @@
                                                         </div>
                                                         <div class="col-lg-7">
                                                             <label class="form-label small fw-semibold"><%= labels.purpose %></label>
-                                                            <input name="purpose" type="text" maxlength="120" value="<%= item.purpose %>" class="form-control" required />
+                                                            <input name="purpose" type="text" maxlength="120" value="<%= item.purpose %>" class="form-control" list="knownPurposesList" autocomplete="off" required />
                                                         </div>
                                                         <div class="col-lg-5">
                                                             <label class="form-label small fw-semibold"><%= labels.amount %></label>
@@ -314,12 +321,18 @@
                                                         </div>
                                                         <div class="col-lg-6">
                                                             <label class="form-label small fw-semibold"><%= labels.attachmentUpload %></label>
-                                                            <input name="attachment_upload" type="file" class="form-control" />
+                                                            <input name="attachment_upload" type="file" class="form-control" accept="image/*,application/pdf" />
+                                                            <% if (item.attachment_path) { %>
+                                                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                                                <button type="button" class="btn btn-sm btn-outline-primary" data-open-receipt-preview="<%= item.attachment_path %>"><%= labels.viewReceipt %></button>
+                                                                <a class="btn btn-sm btn-outline-secondary" href="<%= item.attachment_path %>" download><%= labels.downloadReceipt %></a>
+                                                            </div>
+                                                            <% } %>
                                                         </div>
                                                     </div>
                                                     <div class="d-flex gap-2 justify-content-end mt-3">
                                                         <button type="submit" class="btn btn-success d-none" data-update-button><%= labels.update %></button>
-                                                        <% if (!(item.status === 'refunded' || item.is_refund)) { %>
+                                                        <% if (!(item.status === 'refunded' || item.is_refund || item.status === 'pending')) { %>
                                                         <button type="submit" formaction="/transactions/<%= item.id %>/refund" formmethod="POST" class="btn btn-warning text-dark btn-ledger-refund"><%= labels.refund %></button>
                                                         <% } %>
                                                         <button type="button" class="btn btn-danger btn-ledger-delete" data-open-delete-modal="<%= item.id %>"><%= labels.delete %></button>
@@ -390,6 +403,39 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
                         <button type="button" class="btn btn-danger" id="confirmDeleteButton"><%= labels.confirmDelete %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="replaceReceiptConfirmModal" tabindex="-1" aria-labelledby="replaceReceiptConfirmModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning">
+                        <h5 class="modal-title" id="replaceReceiptConfirmModalLabel"><%= labels.replaceReceiptConfirmTitle %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body"><%= labels.replaceReceiptConfirm %></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.cancel %></button>
+                        <button type="button" class="btn btn-warning" id="confirmReplaceReceiptButton"><%= labels.confirmReplaceReceipt %></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="receiptPreviewModal" tabindex="-1" aria-labelledby="receiptPreviewModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="receiptPreviewModalLabel"><%= labels.receiptPreviewTitle %></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
+                    </div>
+                    <div class="modal-body" id="receiptPreviewModalBody"></div>
+                    <div class="modal-footer">
+                        <a id="receiptPreviewOpenInNewTabButton" class="btn btn-outline-primary" href="#" target="_blank" rel="noopener noreferrer"><%= labels.openInNewTab %></a>
+                        <a id="receiptPreviewDownloadButton" class="btn btn-primary" href="#" download><%= labels.downloadReceipt %></a>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><%= labels.close %></button>
                     </div>
                 </div>
             </div>
@@ -480,19 +526,52 @@
                 const errorModal = errorModalElement ? new bootstrap.Modal(errorModalElement) : null;
                 const deleteConfirmModalElement = document.getElementById("deleteConfirmModal");
                 const deleteConfirmModal = deleteConfirmModalElement ? new bootstrap.Modal(deleteConfirmModalElement) : null;
+                const replaceReceiptConfirmModalElement = document.getElementById("replaceReceiptConfirmModal");
+                const replaceReceiptConfirmModal = replaceReceiptConfirmModalElement ? new bootstrap.Modal(replaceReceiptConfirmModalElement) : null;
                 const settingsModalElement = document.getElementById("settingsModal");
                 const settingsModal = settingsModalElement ? new bootstrap.Modal(settingsModalElement) : null;
                 const annualAlertModalElement = document.getElementById("annualAlertModal");
                 const annualAlertModal = annualAlertModalElement ? new bootstrap.Modal(annualAlertModalElement) : null;
+                const receiptPreviewModalElement = document.getElementById("receiptPreviewModal");
+                const receiptPreviewModalBody = document.getElementById("receiptPreviewModalBody");
+                const receiptPreviewOpenInNewTabButton = document.getElementById("receiptPreviewOpenInNewTabButton");
+                const receiptPreviewDownloadButton = document.getElementById("receiptPreviewDownloadButton");
+                const receiptPreviewModal = receiptPreviewModalElement ? new bootstrap.Modal(receiptPreviewModalElement) : null;
                 const openSettingsModalButton = document.getElementById("openSettingsModalButton");
                 const deleteTransactionForm = document.getElementById("deleteTransactionForm");
                 const confirmDeleteButton = document.getElementById("confirmDeleteButton");
+                const confirmReplaceReceiptButton = document.getElementById("confirmReplaceReceiptButton");
                 const shouldShowAnnualAlert = <%- JSON.stringify(Boolean(shouldShowAnnualAlert)) %>;
                 const receiptDirectory = <%- JSON.stringify(receiptDirectory || []) %>;
                 const requiredFieldMessage = <%- JSON.stringify(labels.requiredField) %>;
                 const duplicateReceiptMessage = <%- JSON.stringify(labels.duplicateReceiptNumber) %>;
                 const paymentReferenceRequiredMessage = <%- JSON.stringify(labels.paymentReferenceRequired) %>;
+                const invalidAttachmentTypeMessage = <%- JSON.stringify(labels.invalidAttachmentType || "Only image and PDF files are allowed.") %>;
+                const replaceReceiptConfirmMessage = <%- JSON.stringify(labels.replaceReceiptConfirm) %>;
+                const receiptPreviewLoadingMessage = <%- JSON.stringify(labels.receiptPreviewLoading || "Loading receipt preview...") %>;
+                const receiptPreviewUnavailableMessage = <%- JSON.stringify(labels.receiptPreviewUnavailable || "Preview is unavailable for this file type. Please download the receipt.") %>;
                 let pendingDeleteTransactionId = "";
+                let activeReceiptPreviewObjectUrl = "";
+                let pendingReplaceReceiptForm = null;
+                let pendingReplaceReceiptSubmitter = null;
+
+                function isAllowedAttachmentFileType (file) {
+                    try {
+                        if (!file) {
+                            return true;
+                        }
+
+                        const mimeType = String(file.type || "").toLowerCase();
+                        if (mimeType.startsWith("image/") || mimeType === "application/pdf") {
+                            return true;
+                        }
+
+                        const fileName = String(file.name || "").toLowerCase();
+                        return /\.(jpg|jpeg|png|gif|webp|bmp|svg|tif|tiff|heic|heif|avif|pdf)$/i.test(fileName);
+                    } catch (error) {
+                        throw withFunctionError("isAllowedAttachmentFileType", error);
+                    }
+                }
 
                 function normalizeReceiptNumberValue (value) {
                     try {
@@ -529,8 +608,13 @@
                     }
                 }
 
-                function shouldRequirePaymentReference (paymentMethod) {
+                function shouldRequirePaymentReference (paymentMethod, status = "") {
                     try {
+                        const normalizedStatus = String(status || "").trim().toLowerCase();
+                        if (normalizedStatus === "pending") {
+                            return false;
+                        }
+
                         return paymentMethod === "credit_card" || paymentMethod === "bank_transfer" || paymentMethod === "cheque";
                     } catch (error) {
                         throw withFunctionError("shouldRequirePaymentReference", error);
@@ -551,11 +635,187 @@
                     }
                 }
 
-                function shouldEnablePaidByAutocomplete (value) {
+                function shouldEnableAutocomplete (value) {
                     try {
                         return String(value || "").trim().length >= 2;
                     } catch (error) {
-                        throw withFunctionError("shouldEnablePaidByAutocomplete", error);
+                        throw withFunctionError("shouldEnableAutocomplete", error);
+                    }
+                }
+
+                function isImageAttachmentPath (filePath) {
+                    try {
+                        return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|tiff?)$/i.test(String(filePath || "").split("?")[0]);
+                    } catch (error) {
+                        throw withFunctionError("isImageAttachmentPath", error);
+                    }
+                }
+
+                function isPdfAttachmentPath (filePath) {
+                    try {
+                        return /\.pdf$/i.test(String(filePath || "").split("?")[0]);
+                    } catch (error) {
+                        throw withFunctionError("isPdfAttachmentPath", error);
+                    }
+                }
+
+                function isImageMimeType (mimeType) {
+                    try {
+                        return /^image\//i.test(String(mimeType || ""));
+                    } catch (error) {
+                        throw withFunctionError("isImageMimeType", error);
+                    }
+                }
+
+                function isPdfMimeType (mimeType) {
+                    try {
+                        return /application\/pdf/i.test(String(mimeType || ""));
+                    } catch (error) {
+                        throw withFunctionError("isPdfMimeType", error);
+                    }
+                }
+
+                function revokeActiveReceiptPreviewObjectUrl () {
+                    try {
+                        if (activeReceiptPreviewObjectUrl) {
+                            URL.revokeObjectURL(activeReceiptPreviewObjectUrl);
+                            activeReceiptPreviewObjectUrl = "";
+                        }
+                    } catch (error) {
+                        throw withFunctionError("revokeActiveReceiptPreviewObjectUrl", error);
+                    }
+                }
+
+                function setReceiptPreviewUnavailableState () {
+                    try {
+                        if (!receiptPreviewModalBody) {
+                            return;
+                        }
+
+                        receiptPreviewModalBody.innerHTML = "";
+                        const notice = document.createElement("div");
+                        notice.className = "alert alert-secondary mb-0";
+                        notice.textContent = receiptPreviewUnavailableMessage;
+                        receiptPreviewModalBody.appendChild(notice);
+                    } catch (error) {
+                        throw withFunctionError("setReceiptPreviewUnavailableState", error);
+                    }
+                }
+
+                function detectPreviewKindFromBytes (bytes) {
+                    try {
+                        if (!bytes || bytes.length < 4) {
+                            return "unknown";
+                        }
+
+                        const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+                        const isPng = bytes.length >= 8
+                            && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+                            && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A;
+                        const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+                        const isBmp = bytes[0] === 0x42 && bytes[1] === 0x4D;
+                        const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+                        const isWebp = bytes.length >= 12
+                            && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+                            && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+
+                        if (isPdf) {
+                            return "pdf";
+                        }
+
+                        if (isJpeg || isPng || isGif || isBmp || isWebp) {
+                            return "image";
+                        }
+
+                        return "unknown";
+                    } catch (error) {
+                        throw withFunctionError("detectPreviewKindFromBytes", error);
+                    }
+                }
+
+                function detectPreviewKindFromBlob (blob, filePath) {
+                    try {
+                        const mimeType = String(blob?.type || "").toLowerCase();
+                        if (isImageMimeType(mimeType) || isImageAttachmentPath(filePath)) {
+                            return Promise.resolve("image");
+                        }
+
+                        if (isPdfMimeType(mimeType) || isPdfAttachmentPath(filePath)) {
+                            return Promise.resolve("pdf");
+                        }
+
+                        return blob.arrayBuffer()
+                            .then((buffer) => {
+                                const bytes = new Uint8Array(buffer.slice(0, 16));
+                                return detectPreviewKindFromBytes(bytes);
+                            })
+                            .catch(() => "unknown");
+                    } catch (error) {
+                        throw withFunctionError("detectPreviewKindFromBlob", error);
+                    }
+                }
+
+                function openReceiptPreviewModal (filePath) {
+                    try {
+                        const normalizedPath = String(filePath || "").trim();
+                        if (!normalizedPath || !receiptPreviewModal || !receiptPreviewModalBody || !receiptPreviewDownloadButton || !receiptPreviewOpenInNewTabButton) {
+                            return;
+                        }
+
+                        revokeActiveReceiptPreviewObjectUrl();
+                        receiptPreviewModalBody.innerHTML = "";
+                        receiptPreviewDownloadButton.href = normalizedPath;
+                        receiptPreviewOpenInNewTabButton.href = normalizedPath;
+                        receiptPreviewModalBody.innerHTML = `<p class="text-secondary mb-0">${receiptPreviewLoadingMessage}</p>`;
+                        receiptPreviewModal.show();
+
+                        fetch(normalizedPath, { credentials: "same-origin" })
+                            .then((response) => {
+                                if (!response.ok) {
+                                    throw new Error(`Failed to fetch receipt (${response.status})`);
+                                }
+
+                                return response.blob();
+                            })
+                            .then((blob) => detectPreviewKindFromBlob(blob, normalizedPath)
+                                .then((previewKind) => ({ blob, previewKind })))
+                            .then(({ blob, previewKind }) => {
+                                revokeActiveReceiptPreviewObjectUrl();
+                                activeReceiptPreviewObjectUrl = URL.createObjectURL(blob);
+                                receiptPreviewModalBody.innerHTML = "";
+
+                                if (previewKind === "image") {
+                                    const image = document.createElement("img");
+                                    image.src = activeReceiptPreviewObjectUrl;
+                                    image.alt = "Receipt preview";
+                                    image.className = "img-fluid rounded border";
+                                    image.addEventListener("error", safeHandler(() => {
+                                        setReceiptPreviewUnavailableState();
+                                    }));
+                                    receiptPreviewModalBody.appendChild(image);
+                                    return;
+                                }
+
+                                if (previewKind === "pdf") {
+                                    const frame = document.createElement("iframe");
+                                    frame.src = activeReceiptPreviewObjectUrl;
+                                    frame.title = "Receipt preview";
+                                    frame.style.width = "100%";
+                                    frame.style.minHeight = "70vh";
+                                    frame.style.border = "1px solid #d9e2f2";
+                                    frame.style.borderRadius = "0.75rem";
+                                    receiptPreviewModalBody.appendChild(frame);
+                                    return;
+                                }
+
+                                setReceiptPreviewUnavailableState();
+                            })
+                            .catch((error) => {
+                                console.error(withFunctionError("openReceiptPreviewModal.fetch", error));
+                                setReceiptPreviewUnavailableState();
+                            });
+                    } catch (error) {
+                        throw withFunctionError("openReceiptPreviewModal", error);
                     }
                 }
 
@@ -566,9 +826,11 @@
                         }
 
                         const paymentMethodSelect = form.querySelector('[name="payment_method"]');
+                        const statusSelect = form.querySelector('[name="status"]');
                         const paymentReferenceWrapper = form.querySelector("[data-payment-reference-wrapper]");
                         const paymentReferenceInput = form.querySelector('[name="payment_reference"]');
                         const paidByInput = form.querySelector('[name="paidBy"]');
+                        const purposeInput = form.querySelector('[name="purpose"]');
 
                         function updatePaymentReferenceState () {
                             try {
@@ -576,10 +838,12 @@
                                     return;
                                 }
 
-                                const mustHaveReference = shouldRequirePaymentReference(paymentMethodSelect.value);
+                                const currentStatus = statusSelect ? statusSelect.value : "";
+                                const mustHaveReference = shouldRequirePaymentReference(paymentMethodSelect.value, currentStatus);
+                                const shouldShowReferenceField = String(paymentMethodSelect.value || "").trim().toLowerCase() !== "cash";
                                 paymentReferenceInput.required = mustHaveReference;
                                 if (paymentReferenceWrapper) {
-                                    paymentReferenceWrapper.classList.toggle("d-none", !mustHaveReference);
+                                    paymentReferenceWrapper.classList.toggle("d-none", !shouldShowReferenceField);
                                 }
 
                                 if (!mustHaveReference) {
@@ -592,6 +856,9 @@
 
                         if (paymentMethodSelect && paymentReferenceInput) {
                             paymentMethodSelect.addEventListener("change", safeHandler(updatePaymentReferenceState));
+                            if (statusSelect) {
+                                statusSelect.addEventListener("change", safeHandler(updatePaymentReferenceState));
+                            }
                             updatePaymentReferenceState();
                         }
 
@@ -603,7 +870,7 @@
                             };
 
                             const updatePaidByAutocompleteState = () => {
-                                if (shouldEnablePaidByAutocomplete(paidByInput.value)) {
+                                if (shouldEnableAutocomplete(paidByInput.value)) {
                                     paidByInput.setAttribute("list", knownCustomersListId);
                                 } else {
                                     paidByInput.removeAttribute("list");
@@ -616,6 +883,22 @@
                             paidByInput.addEventListener("focus", safeHandler(updatePaidByAutocompleteState));
                             normalizePaidByField();
                             updatePaidByAutocompleteState();
+                        }
+
+                        if (purposeInput) {
+                            const knownPurposesListId = purposeInput.getAttribute("list") || "knownPurposesList";
+
+                            const updatePurposeAutocompleteState = () => {
+                                if (shouldEnableAutocomplete(purposeInput.value)) {
+                                    purposeInput.setAttribute("list", knownPurposesListId);
+                                } else {
+                                    purposeInput.removeAttribute("list");
+                                }
+                            };
+
+                            purposeInput.addEventListener("input", safeHandler(updatePurposeAutocompleteState));
+                            purposeInput.addEventListener("focus", safeHandler(updatePurposeAutocompleteState));
+                            updatePurposeAutocompleteState();
                         }
                     } catch (error) {
                         throw withFunctionError("initializeCustomerAndPaymentFields", error);
@@ -842,6 +1125,40 @@
                 });
 
                 safeRun(() => {
+                    if (confirmReplaceReceiptButton) {
+                        confirmReplaceReceiptButton.addEventListener("click", safeHandler(() => {
+                            if (!pendingReplaceReceiptForm) {
+                                return;
+                            }
+
+                            const formToSubmit = pendingReplaceReceiptForm;
+                            const submitterToUse = pendingReplaceReceiptSubmitter;
+                            pendingReplaceReceiptForm = null;
+                            pendingReplaceReceiptSubmitter = null;
+
+                            formToSubmit.dataset.replaceReceiptConfirmed = "1";
+                            if (replaceReceiptConfirmModal) {
+                                replaceReceiptConfirmModal.hide();
+                            }
+
+                            if (typeof formToSubmit.requestSubmit === "function") {
+                                formToSubmit.requestSubmit(submitterToUse || undefined);
+                                return;
+                            }
+
+                            formToSubmit.submit();
+                        }));
+                    }
+
+                    if (replaceReceiptConfirmModalElement) {
+                        replaceReceiptConfirmModalElement.addEventListener("hidden.bs.modal", safeHandler(() => {
+                            pendingReplaceReceiptForm = null;
+                            pendingReplaceReceiptSubmitter = null;
+                        }));
+                    }
+                });
+
+                safeRun(() => {
                     if (openSettingsModalButton && settingsModal) {
                         openSettingsModalButton.addEventListener("click", safeHandler(() => {
                             settingsModal.show();
@@ -852,6 +1169,31 @@
                 safeRun(() => {
                     if (shouldShowAnnualAlert && annualAlertModal) {
                         annualAlertModal.show();
+                    }
+                });
+
+                safeRun(() => {
+                    document.querySelectorAll("[data-open-receipt-preview]").forEach((element) => {
+                        element.addEventListener("click", safeHandler((event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openReceiptPreviewModal(element.getAttribute("data-open-receipt-preview"));
+                        }));
+                    });
+
+                    if (receiptPreviewModalElement) {
+                        receiptPreviewModalElement.addEventListener("hidden.bs.modal", safeHandler(() => {
+                            revokeActiveReceiptPreviewObjectUrl();
+                            if (receiptPreviewModalBody) {
+                                receiptPreviewModalBody.innerHTML = "";
+                            }
+                            if (receiptPreviewDownloadButton) {
+                                receiptPreviewDownloadButton.href = "#";
+                            }
+                            if (receiptPreviewOpenInNewTabButton) {
+                                receiptPreviewOpenInNewTabButton.href = "#";
+                            }
+                        }));
                     }
                 });
 
@@ -1012,9 +1354,26 @@
                     }
 
                     const newReceiptInput = newTransactionForm.querySelector('input[name="receiptNumber"]');
+                    const newAttachmentInput = newTransactionForm.querySelector('input[name="attachment_upload"]');
                     const newPaymentMethod = newTransactionForm.querySelector('[name="payment_method"]');
                     const newPaymentReference = newTransactionForm.querySelector('[name="payment_reference"]');
                     initializeCustomerAndPaymentFields(newTransactionForm);
+
+                    if (newAttachmentInput) {
+                        newAttachmentInput.addEventListener("change", safeHandler(() => {
+                            const selectedFile = newAttachmentInput.files && newAttachmentInput.files[0] ? newAttachmentInput.files[0] : null;
+                            if (selectedFile && !isAllowedAttachmentFileType(selectedFile)) {
+                                newAttachmentInput.value = "";
+                                newAttachmentInput.setCustomValidity(invalidAttachmentTypeMessage);
+                                updateReceiptFeedback(newAttachmentInput, invalidAttachmentTypeMessage);
+                                showErrorModal(`${CLIENT_ERROR_PREFIX} ${invalidAttachmentTypeMessage}`);
+                            } else {
+                                newAttachmentInput.setCustomValidity("");
+                                updateReceiptFeedback(newAttachmentInput, requiredFieldMessage);
+                            }
+                        }));
+                    }
+
                     if (newReceiptInput) {
                         newReceiptInput.addEventListener("input", safeHandler(() => {
                             const duplicate = isDuplicateReceipt(newReceiptInput.value);
@@ -1047,10 +1406,24 @@
                             }
 
                             if (newPaymentMethod && newPaymentReference) {
-                                if (shouldRequirePaymentReference(newPaymentMethod.value) && !String(newPaymentReference.value || "").trim()) {
+                                const newStatusInput = newTransactionForm.querySelector('[name="status"]');
+                                const currentStatus = newStatusInput ? newStatusInput.value : "";
+                                if (shouldRequirePaymentReference(newPaymentMethod.value, currentStatus) && !String(newPaymentReference.value || "").trim()) {
                                     newPaymentReference.setCustomValidity(paymentReferenceRequiredMessage);
                                 } else {
                                     newPaymentReference.setCustomValidity("");
+                                }
+                            }
+
+                            if (newAttachmentInput) {
+                                const selectedFile = newAttachmentInput.files && newAttachmentInput.files[0] ? newAttachmentInput.files[0] : null;
+                                if (selectedFile && !isAllowedAttachmentFileType(selectedFile)) {
+                                    newAttachmentInput.setCustomValidity(invalidAttachmentTypeMessage);
+                                    updateReceiptFeedback(newAttachmentInput, invalidAttachmentTypeMessage);
+                                    showErrorModal(`${CLIENT_ERROR_PREFIX} ${invalidAttachmentTypeMessage}`);
+                                } else {
+                                    newAttachmentInput.setCustomValidity("");
+                                    updateReceiptFeedback(newAttachmentInput, requiredFieldMessage);
                                 }
                             }
 
@@ -1074,9 +1447,25 @@
                             const receiptInput = form.querySelector('input[name="receiptNumber"]');
                             const paymentMethodInput = form.querySelector('[name="payment_method"]');
                             const paymentReferenceInput = form.querySelector('[name="payment_reference"]');
+                            const attachmentUploadInput = form.querySelector('[name="attachment_upload"]');
                             const transactionId = form.getAttribute("data-transaction-id") || "";
                             const originalReceipt = form.getAttribute("data-original-receipt") || "";
                             initializeCustomerAndPaymentFields(form);
+
+                            if (attachmentUploadInput) {
+                                attachmentUploadInput.addEventListener("change", safeHandler(() => {
+                                    const selectedFile = attachmentUploadInput.files && attachmentUploadInput.files[0] ? attachmentUploadInput.files[0] : null;
+                                    if (selectedFile && !isAllowedAttachmentFileType(selectedFile)) {
+                                        attachmentUploadInput.value = "";
+                                        attachmentUploadInput.setCustomValidity(invalidAttachmentTypeMessage);
+                                        updateReceiptFeedback(attachmentUploadInput, invalidAttachmentTypeMessage);
+                                        showErrorModal(`${CLIENT_ERROR_PREFIX} ${invalidAttachmentTypeMessage}`);
+                                    } else {
+                                        attachmentUploadInput.setCustomValidity("");
+                                        updateReceiptFeedback(attachmentUploadInput, requiredFieldMessage);
+                                    }
+                                }));
+                            }
 
                             if (receiptInput) {
                                 receiptInput.addEventListener("input", safeHandler(() => {
@@ -1093,6 +1482,43 @@
 
                             form.addEventListener("submit", safeHandler((event) => {
                                 try {
+                                    const submitter = event.submitter;
+                                    const targetAction = String(submitter?.getAttribute("formaction") || form.getAttribute("action") || "");
+                                    const isUpdateAction = targetAction.includes("/update");
+                                    if (isUpdateAction) {
+                                        const existingAttachmentPathInput = form.querySelector('[name="existing_attachment_path"]');
+                                        const hasExistingAttachment = Boolean(String(existingAttachmentPathInput?.value || "").trim());
+                                        const hasNewAttachment = Boolean(attachmentUploadInput?.files && attachmentUploadInput.files.length > 0);
+                                        const hasReplaceReceiptConfirmation = form.dataset.replaceReceiptConfirmed === "1";
+
+                                        if (hasExistingAttachment && hasNewAttachment && !hasReplaceReceiptConfirmation) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            pendingReplaceReceiptForm = form;
+                                            pendingReplaceReceiptSubmitter = submitter || null;
+                                            if (replaceReceiptConfirmModal) {
+                                                replaceReceiptConfirmModal.show();
+                                            } else {
+                                                showErrorModal(`${CLIENT_ERROR_PREFIX} ${replaceReceiptConfirmMessage}`);
+                                            }
+                                            return;
+                                        }
+
+                                        delete form.dataset.replaceReceiptConfirmed;
+                                    }
+
+                                    if (attachmentUploadInput) {
+                                        const selectedFile = attachmentUploadInput.files && attachmentUploadInput.files[0] ? attachmentUploadInput.files[0] : null;
+                                        if (selectedFile && !isAllowedAttachmentFileType(selectedFile)) {
+                                            attachmentUploadInput.setCustomValidity(invalidAttachmentTypeMessage);
+                                            updateReceiptFeedback(attachmentUploadInput, invalidAttachmentTypeMessage);
+                                            showErrorModal(`${CLIENT_ERROR_PREFIX} ${invalidAttachmentTypeMessage}`);
+                                        } else {
+                                            attachmentUploadInput.setCustomValidity("");
+                                            updateReceiptFeedback(attachmentUploadInput, requiredFieldMessage);
+                                        }
+                                    }
+
                                     const paidByField = form.querySelector('[name="paidBy"]');
                                     if (paidByField) {
                                         paidByField.value = normalizePaidByAutocompleteSelection(paidByField.value);
@@ -1110,7 +1536,9 @@
                                     }
 
                                     if (paymentMethodInput && paymentReferenceInput) {
-                                        if (shouldRequirePaymentReference(paymentMethodInput.value) && !String(paymentReferenceInput.value || "").trim()) {
+                                        const statusInput = form.querySelector('[name="status"]');
+                                        const currentStatus = statusInput ? statusInput.value : "";
+                                        if (shouldRequirePaymentReference(paymentMethodInput.value, currentStatus) && !String(paymentReferenceInput.value || "").trim()) {
                                             paymentReferenceInput.setCustomValidity(paymentReferenceRequiredMessage);
                                         } else {
                                             paymentReferenceInput.setCustomValidity("");

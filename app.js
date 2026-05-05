@@ -22,8 +22,94 @@ const PAGE_SIZE = 50;
 const uploadDirPath = path.join(__dirname, "uploads");
 const PAYMENT_METHODS = new Set(["credit_card", "cash", "bank_transfer", "cheque"]);
 const STATUSES = new Set(["paid", "partially_paid", "refunded", "pending"]);
+const ALLOWED_ATTACHMENT_MIME_PATTERN = /^(image\/[a-z0-9.+-]+|application\/pdf)$/i;
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".svg",
+    ".tif",
+    ".tiff",
+    ".heic",
+    ".heif",
+    ".avif",
+    ".pdf",
+]);
+const MIME_EXTENSION_MAP = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/bmp": ".bmp",
+    "image/svg+xml": ".svg",
+    "image/tiff": ".tif",
+    "image/heif": ".heif",
+    "image/heic": ".heic",
+    "application/pdf": ".pdf",
+};
 
-const upload = multer({ dest: uploadDirPath });
+function resolveUploadExtension(file = {}) {
+    try {
+        const originalExtension = String(path.extname(String(file.originalname || "")) || "").toLowerCase();
+        if (/^\.[a-z0-9]{1,10}$/i.test(originalExtension)) {
+            return originalExtension;
+        }
+
+        const mimeType = String(file.mimetype || "").toLowerCase();
+        return MIME_EXTENSION_MAP[mimeType] || "";
+    } catch (error) {
+        throw withFunctionError("resolveUploadExtension", error);
+    }
+}
+
+function isAllowedAttachmentFile(file = {}) {
+    try {
+        const mimeType = String(file.mimetype || "").toLowerCase();
+        if (ALLOWED_ATTACHMENT_MIME_PATTERN.test(mimeType)) {
+            return true;
+        }
+
+        const originalExtension = String(path.extname(String(file.originalname || "")) || "").toLowerCase();
+        return ALLOWED_ATTACHMENT_EXTENSIONS.has(originalExtension);
+    } catch (error) {
+        throw withFunctionError("isAllowedAttachmentFile", error);
+    }
+}
+
+const uploadStorage = multer.diskStorage({
+    destination: (_req, _file, callback) => {
+        callback(null, uploadDirPath);
+    },
+    filename: (_req, file, callback) => {
+        try {
+            const extension = resolveUploadExtension(file);
+            const uniqueName = `${Date.now()}-${Math.floor(Math.random() * 1000000000)}`;
+            callback(null, `${uniqueName}${extension}`);
+        } catch (error) {
+            callback(error);
+        }
+    },
+});
+
+const upload = multer({
+    storage: uploadStorage,
+    fileFilter: (req, file, callback) => {
+        try {
+            if (isAllowedAttachmentFile(file)) {
+                callback(null, true);
+                return;
+            }
+
+            req.fileValidationError = "invalid-attachment-type";
+            callback(null, false);
+        } catch (error) {
+            callback(error);
+        }
+    },
+});
 
 fs.mkdir(uploadDirPath, { recursive: true }).catch((error) => {
     console.error(withFunctionError("createUploadsDirectory", error));
@@ -98,6 +184,7 @@ const TRANSLATIONS = {
         recent30DaysRevenue: "Revenue (Last 30 Days)",
         monthlyBreakdown: "Monthly Breakdown",
         paymentTypeBreakdown: "Payment Type Breakdown",
+        statusBreakdown: "Status Breakdown",
         paymentType: "Payment Type",
         paymentTypeCash: "Cash",
         paymentTypeCreditCard: "Credit Card",
@@ -165,10 +252,20 @@ const TRANSLATIONS = {
         notes: "Notes",
         attachmentPath: "Attachment Path / URL",
         attachmentUpload: "Upload Attachment",
+        viewReceipt: "View Receipt",
+        downloadReceipt: "Download Receipt",
+        receiptPreviewTitle: "Receipt Preview",
+        replaceReceiptConfirm: "Uploading a new receipt will overwrite the existing receipt. Continue?",
+        replaceReceiptConfirmTitle: "Replace Existing Receipt",
+        confirmReplaceReceipt: "Yes, Replace",
+        receiptPreviewLoading: "Loading receipt preview...",
+        receiptPreviewUnavailable: "Preview is unavailable for this file type. Please download the receipt.",
+        openInNewTab: "Open in New Tab",
+        invalidAttachmentType: "Only image and PDF files are allowed.",
         paymentReferenceHelp: "Bank ref / transaction ID / check number",
         invalidPaymentMethod: "Please select a valid payment method.",
         invalidStatus: "Please select a valid payment status.",
-        paymentReferenceRequired: "Payment reference is required for all payment methods except cash.",
+        paymentReferenceRequired: "Payment reference is required for non-cash paid statuses (not required for pending).",
         customerIdRequired: "Customer ID is required.",
         customerIdMismatch: "Customer ID must match the existing customer record for this payer.",
         customerNameMismatch: "This Customer ID is already linked to a different payer.",
@@ -228,6 +325,7 @@ const TRANSLATIONS = {
         recent30DaysRevenue: "הכנסות ב-30 הימים האחרונים",
         monthlyBreakdown: "פילוח חודשי",
         paymentTypeBreakdown: "פילוח לפי אמצעי תשלום",
+        statusBreakdown: "פילוח לפי סטטוס",
         paymentType: "אמצעי תשלום",
         paymentTypeCash: "מזומן",
         paymentTypeCreditCard: "כרטיס אשראי",
@@ -295,10 +393,20 @@ const TRANSLATIONS = {
         notes: "הערות",
         attachmentPath: "נתיב / קישור לקובץ",
         attachmentUpload: "העלאת קובץ",
+        viewReceipt: "צפייה בקבלה",
+        downloadReceipt: "הורדת קבלה",
+        receiptPreviewTitle: "תצוגת קבלה",
+        replaceReceiptConfirm: "העלאת קבלה חדשה תדרוס את הקבלה הקיימת. להמשיך?",
+        replaceReceiptConfirmTitle: "החלפת קבלה קיימת",
+        confirmReplaceReceipt: "כן, החלף",
+        receiptPreviewLoading: "טוען תצוגת קבלה...",
+        receiptPreviewUnavailable: "לא ניתן להציג תצוגה מקדימה עבור סוג קובץ זה. נא להוריד את הקבלה.",
+        openInNewTab: "פתח בלשונית חדשה",
+        invalidAttachmentType: "ניתן להעלות רק קבצי תמונה ו-PDF.",
         paymentReferenceHelp: "אסמכתא בנקאית / מזהה עסקה / מספר צ'ק",
         invalidPaymentMethod: "נא לבחור אמצעי תשלום תקין.",
         invalidStatus: "נא לבחור סטטוס תשלום תקין.",
-        paymentReferenceRequired: "נדרש להזין אסמכתא לכל אמצעי תשלום מלבד מזומן.",
+        paymentReferenceRequired: "נדרשת אסמכתא בסטטוסים ששולמו ובאמצעי תשלום שאינם מזומן (לא נדרש בסטטוס ממתין).",
         customerIdRequired: "נדרש מזהה לקוח.",
         customerIdMismatch: "מזהה הלקוח חייב להתאים לרשומת הלקוח הקיימת עבור משלם זה.",
         customerNameMismatch: "מזהה לקוח זה כבר משויך למשלם אחר.",
@@ -396,8 +504,13 @@ function normalizeStatus(value) {
     }
 }
 
-function shouldRequirePaymentReference(paymentMethod) {
+function shouldRequirePaymentReference(paymentMethod, status = "") {
     try {
+        const normalizedStatus = String(status || "").trim().toLowerCase();
+        if (normalizedStatus === "pending") {
+            return false;
+        }
+
         return paymentMethod === "credit_card" || paymentMethod === "bank_transfer" || paymentMethod === "cheque";
     } catch (error) {
         throw withFunctionError("shouldRequirePaymentReference", error);
@@ -745,6 +858,47 @@ function buildIndexPath({ success, page, filters, deletedAuditId, refundedAuditI
 
 function stringifyAuditDetails(payload = {}) {
     try {
+        const beforeState = payload && typeof payload.before === "object" && payload.before !== null
+            ? payload.before
+            : null;
+        const afterState = payload && typeof payload.after === "object" && payload.after !== null
+            ? payload.after
+            : null;
+
+        if (beforeState && afterState) {
+            const excludedKeys = new Set(["id", "createdAt"]);
+            const keys = Array.from(new Set([
+                ...Object.keys(beforeState),
+                ...Object.keys(afterState),
+            ]))
+                .filter((key) => !excludedKeys.has(key))
+                .sort();
+
+            const changes = keys
+                .filter((key) => {
+                    const beforeValue = beforeState[key];
+                    const afterValue = afterState[key];
+                    return JSON.stringify(beforeValue) !== JSON.stringify(afterValue);
+                })
+                .map((key) => {
+                    const beforeValue = beforeState[key];
+                    const afterValue = afterState[key];
+                    const beforeText = beforeValue === undefined || beforeValue === null || beforeValue === ""
+                        ? "(empty)"
+                        : (typeof beforeValue === "object" ? JSON.stringify(beforeValue) : String(beforeValue));
+                    const afterText = afterValue === undefined || afterValue === null || afterValue === ""
+                        ? "(empty)"
+                        : (typeof afterValue === "object" ? JSON.stringify(afterValue) : String(afterValue));
+                    return `${key}: ${beforeText} -> ${afterText}`;
+                });
+
+            if (changes.length > 0) {
+                return changes.join(" | ");
+            }
+
+            return "No field changes recorded.";
+        }
+
         return Object.entries(payload)
             .filter(([key]) => key !== "before" && key !== "after" && key !== "transaction")
             .map(([key, value]) => `${key}: ${String(value)}`)
@@ -767,9 +921,10 @@ function getSignedTransactionAmount(transaction) {
         const rawAmount = Number(transaction?.amount || 0);
         const safeAmount = Number.isFinite(rawAmount) ? rawAmount : 0;
         const isRefunded = String(transaction?.status || "").toLowerCase() === "refunded" || Boolean(transaction?.is_refund);
+        const isPending = String(transaction?.status || "").toLowerCase() === "pending";
 
-        // Refunded transactions are removed from revenue totals rather than counted as negative revenue.
-        return isRefunded ? 0 : Math.abs(safeAmount);
+        // Refunded and pending transactions are excluded from paid revenue totals.
+        return (isRefunded || isPending) ? 0 : Math.abs(safeAmount);
     } catch (error) {
         throw withFunctionError("getSignedTransactionAmount", error);
     }
@@ -884,6 +1039,11 @@ function calculateStatistics(transactions, lang, labels) {
             ["bank_transfer", { count: 0, total: 0 }],
             ["cheque", { count: 0, total: 0 }],
         ]);
+        const statusTotals = new Map([
+            ["paid", { count: 0, total: 0 }],
+            ["partially_paid", { count: 0, total: 0 }],
+            ["pending", { count: 0, total: 0 }],
+        ]);
         const currentYear = String(new Date().getFullYear());
         const last30DaysStart = new Date();
         last30DaysStart.setDate(last30DaysStart.getDate() - 30);
@@ -898,6 +1058,9 @@ function calculateStatistics(transactions, lang, labels) {
                 return;
             }
 
+            const rawAmount = Number(item.amount || 0);
+            const statusAmount = Number.isFinite(rawAmount) ? Math.abs(rawAmount) : 0;
+
             const isRefund = String(item.status || "").toLowerCase() === "refunded" || Boolean(item.is_refund);
             if (isRefund) {
                 refundCount += 1;
@@ -910,6 +1073,15 @@ function calculateStatistics(transactions, lang, labels) {
                 paymentMethodTotals.set(paymentMethod, {
                     count: existingMethodTotals.count + 1,
                     total: existingMethodTotals.total + amount,
+                });
+            }
+
+            const statusKey = String(item.status || "paid").trim().toLowerCase();
+            if (statusTotals.has(statusKey) && !isRefund) {
+                const existingStatusTotals = statusTotals.get(statusKey) || { count: 0, total: 0 };
+                statusTotals.set(statusKey, {
+                    count: existingStatusTotals.count + 1,
+                    total: existingStatusTotals.total + statusAmount,
                 });
             }
 
@@ -979,6 +1151,20 @@ function calculateStatistics(transactions, lang, labels) {
             .filter((row) => row.count > 0)
             .sort((a, b) => b.total - a.total);
 
+        const statusLabelByKey = {
+            paid: labels.statusPaid,
+            partially_paid: labels.statusPartiallyPaid,
+            pending: labels.statusPending,
+        };
+
+        const statusBreakdown = [...statusTotals.entries()]
+            .map(([statusKey, value]) => ({
+                statusKey,
+                statusLabel: statusLabelByKey[statusKey] || statusKey,
+                count: value.count,
+                total: value.total,
+            }));
+
         return {
             totalTransactions,
             totalRevenue,
@@ -996,6 +1182,7 @@ function calculateStatistics(transactions, lang, labels) {
             recent30DaysRevenue,
             monthOverMonthChangePercent,
             paymentTypeBreakdown,
+            statusBreakdown,
             monthlyBreakdown,
         };
     } catch (error) {
@@ -1134,6 +1321,12 @@ async function renderIndex(res, options = {}) {
                         entry,
                     ]),
             ).values()),
+            purposeDirectory: Array.from(new Map(
+                allTransactions
+                    .map((item) => String(item.purpose || "").trim())
+                    .filter(Boolean)
+                    .map((purpose) => [purpose.toLowerCase(), purpose]),
+            ).values()),
             ...annualThresholdStatus,
         });
     } catch (error) {
@@ -1232,6 +1425,21 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
             hintedCustomerId: parsedPaidBy.hintedCustomerId,
         });
 
+        if (req.fileValidationError === "invalid-attachment-type") {
+            return await renderIndex(res, {
+                lang,
+                statusCode: 400,
+                formData: {
+                    ...formData,
+                    payment_method: paymentMethod || "cash",
+                    payment_reference: paymentReference,
+                    status: status || "paid",
+                    notes,
+                },
+                error: labels.invalidAttachmentType,
+            });
+        }
+
         if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !paidBy) {
             return await renderIndex(res, {
                 lang,
@@ -1275,7 +1483,7 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
             });
         }
 
-        if (shouldRequirePaymentReference(paymentMethod) && !paymentReference) {
+        if (shouldRequirePaymentReference(paymentMethod, status) && !paymentReference) {
             return await renderIndex(res, {
                 lang,
                 statusCode: 400,
@@ -1402,6 +1610,16 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             excludeId: req.params.id,
         });
 
+        if (req.fileValidationError === "invalid-attachment-type") {
+            return await renderIndex(res, {
+                lang,
+                page,
+                filters,
+                statusCode: 400,
+                error: labels.invalidAttachmentType,
+            });
+        }
+
         if (!formData.receiptNumber?.trim() || !Number.isFinite(amount) || amount <= 0 || !isValidDateNotInFuture(formData.date) || !formData.purpose?.trim() || !paidBy) {
             return await renderIndex(res, {
                 lang,
@@ -1432,7 +1650,7 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             });
         }
 
-        if (shouldRequirePaymentReference(paymentMethod) && !paymentReference) {
+        if (shouldRequirePaymentReference(paymentMethod, status) && !paymentReference) {
             return await renderIndex(res, {
                 lang,
                 page,

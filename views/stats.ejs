@@ -149,7 +149,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-8">
+                <div class="col-lg-4">
                     <div class="card shadow-sm border-0 h-100">
                         <div class="card-header app-card-header">
                             <h2 class="h5 mb-0"><%= labels.paymentTypeBreakdown %></h2>
@@ -173,6 +173,41 @@
                                         <% stats.paymentTypeBreakdown.forEach((row) => { %>
                                         <tr>
                                             <td><%= row.methodLabel %></td>
+                                            <td class="text-end"><%= row.count %></td>
+                                            <td class="text-end fw-semibold"><%= formatCurrency(row.total) %></td>
+                                        </tr>
+                                        <% }) %>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header app-card-header">
+                            <h2 class="h5 mb-0"><%= labels.statusBreakdown %></h2>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th><%= labels.status %></th>
+                                            <th class="text-end"><%= labels.transactionCount %></th>
+                                            <th class="text-end"><%= labels.totalAmount %></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (stats.statusBreakdown.length === 0) { %>
+                                        <tr>
+                                            <td colspan="3" class="text-center text-secondary py-4">-</td>
+                                        </tr>
+                                        <% } else { %>
+                                        <% stats.statusBreakdown.forEach((row) => { %>
+                                        <tr>
+                                            <td><%= row.statusLabel %></td>
                                             <td class="text-end"><%= row.count %></td>
                                             <td class="text-end fw-semibold"><%= formatCurrency(row.total) %></td>
                                         </tr>

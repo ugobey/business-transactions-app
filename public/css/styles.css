@@ -127,6 +127,19 @@ body {
     color: var(--ia-brand-deep);
 }
 
+.ledger-row-pending {
+    background-color: #fff2f2;
+}
+
+.ledger-row-pending td {
+    border-color: #f3c5cc;
+}
+
+.ledger-row-pending .editable-cell,
+.ledger-row-pending td {
+    color: #8a1f2f;
+}
+
 .ledger-edit-row td {
     background: #F3F3F3;
 }

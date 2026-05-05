@@ -37,20 +37,15 @@ Your Business Transactions app supports backup to your personal Google Drive usi
 ### Step 4: Configure Your App
 
 1. Copy the downloaded JSON file to your project root and rename it to `credentials.json`
-2. Create a `.env` file in the project root:
-   ```
-   GOOGLE_CREDENTIALS_PATH=./credentials.json
-   ```
-3. Restart your app (`npm start`)
+2. Restart your app (`npm start`)
 
 ### Step 5: Authorize Google Drive
 
 1. Open your app and click the **Backup** button in the navbar
 2. Click **Connect Google Drive** — a new tab opens
 3. Sign in with your Google account and click **Allow**
-4. The tab will close/show a success message
-5. Back in the modal, click **Check Connection** — it should show "✓ Google Drive connected"
-6. Click **Backup Now**
+4. The tab will close automatically and the modal will refresh to show "✓ Google Drive connected"
+5. Click **Backup Now**
 
 Backups are saved in a folder called **BusinessTransactionsBackup** in your personal Google Drive.
 
@@ -58,7 +53,7 @@ Backups are saved in a folder called **BusinessTransactionsBackup** in your pers
 
 ## Security Notes
 
-- `credentials.json` and `.env` are in `.gitignore` — never commit them
+- `credentials.json` is in `.gitignore` — never commit it
 - The saved token is stored at `data/google-token.json` (also excluded from git)
 - To disconnect, click **Disconnect** in the Backup modal
 

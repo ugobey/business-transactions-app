@@ -1674,7 +1674,24 @@ app.post("/settings", async (req, res, next) => {
 // --- Google Drive Backup OAuth2 routes ---
 
 function getCredentialsPath() {
-    return process.env.GOOGLE_CREDENTIALS_PATH || null;
+    return path.join(__dirname, "credentials.json");
+}
+
+async function validateCredentialsFile() {
+    try {
+        const credentialsPath = getCredentialsPath();
+        const content = await fs.readFile(credentialsPath, "utf8");
+        if (!content || content.trim().length === 0) {
+            return { valid: false };
+        }
+        const parsed = JSON.parse(content);
+        if (!parsed.installed && !parsed.web) {
+            return { valid: false };
+        }
+        return { valid: true };
+    } catch (error) {
+        return { valid: false };
+    }
 }
 
 const backupJobs = new Map();
@@ -1715,11 +1732,48 @@ app.get("/admin/backup/status", async (req, res, next) => {
     }
 });
 
+app.get("/admin/backup/credentials-status", async (req, res, next) => {
+    try {
+        const validation = await validateCredentialsFile();
+        return res.json({ success: true, credentialsValid: validation.valid });
+    } catch (error) {
+        return next(withFunctionError("app.get /admin/backup/credentials-status", error));
+    }
+});
+
+app.post("/admin/backup/credentials", async (req, res, next) => {
+    try {
+        const credentialsJson = String(req.body.credentialsJson || "").trim();
+        if (!credentialsJson) {
+            return res.status(400).json({ success: false, error: "Credentials JSON is required." });
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(credentialsJson);
+        } catch (parseError) {
+            return res.status(400).json({ success: false, error: "Invalid JSON format." });
+        }
+
+        if (!parsed.installed && !parsed.web) {
+            return res.status(400).json({ success: false, error: "Invalid credentials format. Expected 'installed' or 'web' object." });
+        }
+
+        const credentialsPath = getCredentialsPath();
+        await fs.mkdir(path.dirname(credentialsPath), { recursive: true });
+        await fs.writeFile(credentialsPath, JSON.stringify(parsed, null, 2), "utf8");
+
+        return res.json({ success: true, message: "Credentials saved successfully." });
+    } catch (error) {
+        return next(withFunctionError("app.post /admin/backup/credentials", error));
+    }
+});
+
 app.get("/admin/backup/auth", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
         if (!credentialsPath) {
-            return res.status(400).send("GOOGLE_CREDENTIALS_PATH not set in .env file.");
+            return res.status(400).send("Credentials file not found.");
         }
         const redirectUri = `${req.protocol}://${req.get("host")}/admin/backup/auth/callback`;
         const authUrl = await getAuthUrl(credentialsPath, redirectUri);
@@ -1755,7 +1809,7 @@ app.post("/admin/backup", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
         if (!credentialsPath) {
-            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+            return res.status(400).json({ success: false, error: "Credentials file not found." });
         }
         const authorized = await initializeAuth(credentialsPath);
         if (!authorized) {
@@ -1785,7 +1839,7 @@ app.post("/admin/backup/start", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
         if (!credentialsPath) {
-            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+            return res.status(400).json({ success: false, error: "Credentials file not found." });
         }
 
         const authorized = await initializeAuth(credentialsPath);
@@ -1861,7 +1915,7 @@ app.get("/admin/restore/backups", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
         if (!credentialsPath) {
-            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+            return res.status(400).json({ success: false, error: "Credentials file not found." });
         }
         const authorized = await initializeAuth(credentialsPath);
         if (!authorized) {
@@ -1879,7 +1933,7 @@ app.post("/admin/restore/start", async (req, res, next) => {
     try {
         const credentialsPath = getCredentialsPath();
         if (!credentialsPath) {
-            return res.status(400).json({ success: false, error: "GOOGLE_CREDENTIALS_PATH not set in .env file." });
+            return res.status(400).json({ success: false, error: "Credentials file not found." });
         }
         const authorized = await initializeAuth(credentialsPath);
         if (!authorized) {

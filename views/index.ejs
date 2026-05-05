@@ -237,7 +237,7 @@
                                         <% transactions.forEach((item) => { %>
                                         <% const isRefunded = item.status === 'refunded' || item.is_refund; %>
                                         <% const isPending = item.status === 'pending'; %>
-                                        <tr class="ledger-view-row <%= isRefunded ? 'table-secondary text-secondary' : '' %> <%= (!isRefunded && isPending) ? 'ledger-row-pending' : '' %>" data-item-id="<%= item.id %>" <% if (!isRefunded) { %>data-open-editor="edit-<%= item.id %>"<% } %>>
+                                        <tr class="ledger-view-row <%= isRefunded ? 'table-secondary text-secondary' : '' %> <%= (!isRefunded && isPending) ? 'ledger-row-pending' : '' %>" data-item-id="<%= item.id %>" <% if (!isRefunded) { %>data-open-editor="edit-<%= item.id %>" <% } %>>
                                             <td class="<%= isRefunded ? 'col-receipt' : 'editable-cell col-receipt' %>"><%= item.receiptNumber %></td>
                                             <td class="<%= isRefunded ? 'col-date' : 'editable-cell col-date' %>"><%= item.date %></td>
                                             <td class="<%= isRefunded ? '' : 'editable-cell' %>"><%= item.paidBy %></td>
@@ -518,6 +518,12 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= labels.close %>"></button>
                     </div>
                     <div class="modal-body">
+                        <div id="backupCredentialsSection" class="d-none">
+                            <p class="mb-3 text-muted small">Your Google credentials file is missing or invalid. Paste your <strong>credentials.json</strong> content below:</p>
+                            <textarea id="credentialsJsonInput" class="form-control mb-2" rows="8" placeholder="Paste the entire contents of your credentials.json file here..."></textarea>
+                            <button type="button" class="btn btn-sm btn-primary w-100" id="saveCredentialsButton">Save Credentials</button>
+                            <div id="credentialsSaveStatus" class="mt-2"></div>
+                        </div>
                         <div id="backupAuthSection" class="d-none">
                             <p class="mb-3 text-muted small">Connect your Google account to back up transactions, audit trail, and receipts to your personal Google Drive.</p>
                             <a href="/admin/backup/auth" target="_blank" class="btn btn-outline-primary w-100" id="backupConnectButton">Connect Google Drive</a>
@@ -611,6 +617,10 @@
                 const backupConnectedSection = document.getElementById("backupConnectedSection");
                 const backupDisconnectButton = document.getElementById("backupDisconnectButton");
                 const restoreFromDriveButton = document.getElementById("restoreFromDriveButton");
+                const backupCredentialsSection = document.getElementById("backupCredentialsSection");
+                const credentialsJsonInput = document.getElementById("credentialsJsonInput");
+                const saveCredentialsButton = document.getElementById("saveCredentialsButton");
+                const credentialsSaveStatus = document.getElementById("credentialsSaveStatus");
                 const restoreInfoSection = document.getElementById("restoreInfoSection");
                 const restoreBackupList = document.getElementById("restoreBackupList");
                 const restoreSelectedName = document.getElementById("restoreSelectedName");
@@ -645,6 +655,19 @@
                 }
 
                 async function refreshBackupAuthState () {
+                    let credentialsValid = true;
+                    let showCredentialsInput = false;
+
+                    try {
+                        const credentialsCheckRes = await fetch("/admin/backup/credentials-status");
+                        const credentialsCheckData = await credentialsCheckRes.json();
+                        credentialsValid = Boolean(credentialsCheckData.credentialsValid);
+                    } catch {
+                        credentialsValid = false;
+                    }
+
+                    showCredentialsInput = !credentialsValid;
+
                     try {
                         const res = await fetch("/admin/backup/status");
                         const data = await res.json();
@@ -661,7 +684,8 @@
                             }
                         }
 
-                        backupAuthSection.classList.toggle("d-none", authorized);
+                        backupAuthSection.classList.toggle("d-none", authorized || showCredentialsInput);
+                        backupCredentialsSection.classList.toggle("d-none", !showCredentialsInput);
                         backupConnectedSection.classList.toggle("d-none", !authorized);
                         backupNowButton.classList.toggle("d-none", !authorized);
                         backupDisconnectButton.classList.toggle("d-none", !authorized);
@@ -669,7 +693,8 @@
                         restoreInfoSection.classList.add("d-none");
                         setBackupNowButtonVariant(false);
                     } catch {
-                        backupAuthSection.classList.remove("d-none");
+                        backupAuthSection.classList.toggle("d-none", showCredentialsInput);
+                        backupCredentialsSection.classList.toggle("d-none", !showCredentialsInput);
                         backupConnectedSection.classList.add("d-none");
                         backupNowButton.classList.add("d-none");
                         backupDisconnectButton.classList.add("d-none");
@@ -880,15 +905,15 @@
                         }
 
                         const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
-                        const isPng = bytes.length >= 8
-                            && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
-                            && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A;
+                        const isPng = bytes.length >= 8 &&
+                            bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+                            bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A;
                         const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
                         const isBmp = bytes[0] === 0x42 && bytes[1] === 0x4D;
                         const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
-                        const isWebp = bytes.length >= 12
-                            && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
-                            && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+                        const isWebp = bytes.length >= 12 &&
+                            bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+                            bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
 
                         if (isPdf) {
                             return "pdf";
@@ -940,7 +965,9 @@
                         receiptPreviewModalBody.innerHTML = `<p class="text-secondary mb-0">${receiptPreviewLoadingMessage}</p>`;
                         receiptPreviewModal.show();
 
-                        fetch(normalizedPath, { credentials: "same-origin" })
+                        fetch(normalizedPath, {
+                                credentials: "same-origin"
+                            })
                             .then((response) => {
                                 if (!response.ok) {
                                     throw new Error(`Failed to fetch receipt (${response.status})`);
@@ -949,8 +976,14 @@
                                 return response.blob();
                             })
                             .then((blob) => detectPreviewKindFromBlob(blob, normalizedPath)
-                                .then((previewKind) => ({ blob, previewKind })))
-                            .then(({ blob, previewKind }) => {
+                                .then((previewKind) => ({
+                                    blob,
+                                    previewKind
+                                })))
+                            .then(({
+                                blob,
+                                previewKind
+                            }) => {
                                 revokeActiveReceiptPreviewObjectUrl();
                                 activeReceiptPreviewObjectUrl = URL.createObjectURL(blob);
                                 receiptPreviewModalBody.innerHTML = "";
@@ -1013,12 +1046,12 @@
                                 const mustHaveReference = shouldRequirePaymentReference(paymentMethodSelect.value, currentStatus);
                                 const shouldShowReferenceField = String(paymentMethodSelect.value || "").trim().toLowerCase() !== "cash";
                                 paymentReferenceInput.required = mustHaveReference;
-                                
+
                                 // If payment method is cash, clear the payment reference field
                                 if (String(paymentMethodSelect.value || "").trim().toLowerCase() === "cash") {
                                     paymentReferenceInput.value = "";
                                 }
-                                
+
                                 if (paymentReferenceWrapper) {
                                     paymentReferenceWrapper.classList.toggle("d-none", !shouldShowReferenceField);
                                 }
@@ -1167,7 +1200,9 @@
                 safeRun(() => {
                     fetch("/admin/uploads/cleanup-if-empty", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
                     }).catch(() => {
                         // Ignore cleanup request failures to avoid interrupting the page UX.
                     });
@@ -1386,9 +1421,56 @@
                 });
 
                 safeRun(() => {
+                    if (saveCredentialsButton) {
+                        saveCredentialsButton.addEventListener("click", safeHandler(async () => {
+                            try {
+                                saveCredentialsButton.disabled = true;
+                                credentialsSaveStatus.innerHTML = "";
+
+                                const credentialsJson = credentialsJsonInput.value.trim();
+                                if (!credentialsJson) {
+                                    credentialsSaveStatus.innerHTML = '<div class="alert alert-danger py-1 px-2 small mb-0">Credentials JSON is required.</div>';
+                                    saveCredentialsButton.disabled = false;
+                                    return;
+                                }
+
+                                const response = await fetch("/admin/backup/credentials", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        credentialsJson
+                                    }),
+                                });
+
+                                const data = await response.json();
+                                if (data.success) {
+                                    credentialsSaveStatus.innerHTML = '<div class="alert alert-success py-1 px-2 small mb-0">Credentials saved successfully!</div>';
+                                    credentialsJsonInput.value = "";
+                                    setTimeout(async () => {
+                                        credentialsSaveStatus.innerHTML = "";
+                                        saveCredentialsButton.disabled = false;
+                                        await refreshBackupAuthState();
+                                    }, 1500);
+                                } else {
+                                    credentialsSaveStatus.innerHTML = `<div class="alert alert-danger py-1 px-2 small mb-0">${data.error || "Failed to save credentials."}</div>`;
+                                    saveCredentialsButton.disabled = false;
+                                }
+                            } catch {
+                                credentialsSaveStatus.innerHTML = '<div class="alert alert-danger py-1 px-2 small mb-0">Error saving credentials. Please try again.</div>';
+                                saveCredentialsButton.disabled = false;
+                            }
+                        }));
+                    }
+                });
+
+                safeRun(() => {
                     if (backupDisconnectButton) {
                         backupDisconnectButton.addEventListener("click", safeHandler(async () => {
-                            await fetch("/admin/backup/revoke", { method: "POST" });
+                            await fetch("/admin/backup/revoke", {
+                                method: "POST"
+                            });
                             backupStatus.innerHTML = "";
                             backupResults.innerHTML = "";
                             await refreshBackupAuthState();
@@ -1421,7 +1503,9 @@
 
                                 const response = await fetch("/admin/backup/start", {
                                     method: "POST",
-                                    headers: { "Content-Type": "application/json" },
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
                                 });
                                 const data = await response.json();
 
@@ -1448,9 +1532,9 @@
                                             }
                                             if (job.result && job.result.files) {
                                                 const filesList = job.result.files.map((f) => f.name).join(", ");
-                                                const cleanupStatus = job.result.zipDeleted
-                                                    ? "Local temporary zip deleted."
-                                                    : "Local temporary zip could not be deleted.";
+                                                const cleanupStatus = job.result.zipDeleted ?
+                                                    "Local temporary zip deleted." :
+                                                    "Local temporary zip could not be deleted.";
                                                 backupResults.innerHTML = `<div class="text-muted small mt-1"><strong>Backed up:</strong> ${filesList}<br><strong>Cleanup:</strong> ${cleanupStatus}</div>`;
                                             }
                                             jobCompleted = true;
@@ -1529,7 +1613,9 @@
                                     `;
                                 };
 
-                                const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+                                const wait = (ms) => new Promise((resolve) => {
+                                    setTimeout(resolve, ms);
+                                });
 
                                 restoreConfirmSection.classList.add("d-none");
                                 restoreConfirmButton.disabled = true;
@@ -1538,8 +1624,12 @@
 
                                 const response = await fetch("/admin/restore/start", {
                                     method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ fileId: selectedRestoreFileId }),
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        fileId: selectedRestoreFileId
+                                    }),
                                 });
                                 const data = await response.json();
 
@@ -1731,9 +1821,9 @@
 
                     document.querySelectorAll("[data-open-editor]").forEach((element) => {
                         element.addEventListener("click", safeHandler((event) => {
-                            const clickedInteractiveElement = event.target instanceof Element
-                                ? event.target.closest("button, a, input, select, textarea, form, label")
-                                : null;
+                            const clickedInteractiveElement = event.target instanceof Element ?
+                                event.target.closest("button, a, input, select, textarea, form, label") :
+                                null;
                             if (clickedInteractiveElement) {
                                 return;
                             }

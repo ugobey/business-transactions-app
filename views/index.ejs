@@ -19,12 +19,14 @@
                     <span class="navbar-brand text-white mb-0 h1 fs-4 fw-bold"><%= settings.appBrand || labels.appTitle %></span>
                     <p class="text-white-50 mb-0 small"><%= labels.subtitle %></p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <% if (hasAnyTransactions) { %>
+                        <% if (hasAnyAuditEntries) { %>
                         <a class="btn btn-sm btn-outline-light" href="/admin/audit"><%= labels.auditTrail %></a>
+                        <% } %>
+                        <% if (hasAnyTransactions) { %>
                         <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
+                        <button type="button" class="btn btn-sm btn-outline-light" id="openBackupModalButton"><%= labels.backup || "Backup" %></button>
                         <% } %>
                         <button type="button" class="btn btn-sm btn-outline-light" id="openSettingsModalButton"><%= labels.settings %></button>
-                                            <button type="button" class="btn btn-sm btn-outline-light" id="openBackupModalButton"><%= labels.backup || "Backup" %></button>
                     </div>
                 </div>
                 <div class="nav-controls mt-3 mt-lg-0">
@@ -99,7 +101,7 @@
                             <form action="/transactions" method="POST" enctype="multipart/form-data" class="vstack gap-3" novalidate>
                                 <div>
                                     <label for="receiptNumber" class="form-label fw-semibold"><%= labels.receiptNumber %></label>
-                                    <input id="receiptNumber" name="receiptNumber" type="text" maxlength="40" placeholder="RCPT-2026-001" value="<%= formData.receiptNumber %>" class="form-control" required />
+                                    <input id="receiptNumber" name="receiptNumber" type="text" maxlength="40" placeholder="RCPT-2026-001" value="<%= formData.receiptNumber || settings.receiptPrefix || '' %>" class="form-control" required />
                                     <div class="invalid-feedback"><%= labels.requiredField %></div>
                                 </div>
 
@@ -461,6 +463,12 @@
                             <div>
                                 <label for="appBrand" class="form-label fw-semibold"><%= labels.appBrand %></label>
                                 <input id="appBrand" name="appBrand" type="text" maxlength="80" class="form-control" value="<%= settings.appBrand || 'Business Transactions' %>" placeholder="Business Transactions" />
+                            </div>
+
+                            <div>
+                                <label for="receiptPrefix" class="form-label fw-semibold"><%= labels.receiptPrefix || 'Receipt Prefix' %></label>
+                                <input id="receiptPrefix" name="receiptPrefix" type="text" maxlength="30" class="form-control" value="<%= settings.receiptPrefix || '' %>" placeholder="e.g. INV-" />
+                                <div class="form-text"><%= labels.receiptPrefixHelp || 'Optional prefix automatically added to every receipt number.' %></div>
                             </div>
 
                             <div>

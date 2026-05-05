@@ -20,7 +20,9 @@
                     <p class="text-white-50 mb-0 small"><%= labels.auditTrail %></p>
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <a class="btn btn-sm btn-outline-light" href="/"><%= labels.backToLedger %></a>
+                        <% if (hasAnyTransactions) { %>
                         <a class="btn btn-sm btn-outline-light" href="/stats"><%= labels.stats %></a>
+                        <% } %>
                     </div>
                 </div>
             </div>

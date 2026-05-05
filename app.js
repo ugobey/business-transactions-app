@@ -204,6 +204,8 @@ const TRANSLATIONS = {
         alertPercentThreshold: "Alert Percent Threshold",
         saveSettings: "Save Settings",
         appBrand: "Navbar Brand",
+        receiptPrefix: "Receipt Prefix",
+        receiptPrefixHelp: "Optional prefix automatically added to every receipt number.",
         successSettingsSaved: "Settings saved successfully.",
         invalidSettings: "Please provide a valid annual threshold and an alert percent between 1 and 100.",
         annualAlertTitle: "Annual Threshold Alert",
@@ -348,6 +350,8 @@ const TRANSLATIONS = {
         alertPercentThreshold: "אחוז סף התראה",
         saveSettings: "שמור הגדרות",
         appBrand: "כותרת בסרגל הניווט",
+        receiptPrefix: "קידומת מספר קבלה",
+        receiptPrefixHelp: "קידומת אופציונלית שמתווספת אוטומטית לכל מספר קבלה.",
         successSettingsSaved: "ההגדרות נשמרו בהצלחה.",
         invalidSettings: "נא להזין סף שנתי תקין ואחוז התראה בין 1 ל-100.",
         annualAlertTitle: "התראת סף שנתי",
@@ -641,6 +645,23 @@ function normalizeReceiptNumber(value) {
         return String(value || "").trim().toLowerCase();
     } catch (error) {
         throw withFunctionError("normalizeReceiptNumber", error);
+    }
+}
+
+function applyReceiptPrefix(receiptNumber, receiptPrefix = "") {
+    try {
+        const safeReceiptNumber = String(receiptNumber || "").trim();
+        const safePrefix = String(receiptPrefix || "").trim();
+
+        if (!safePrefix || !safeReceiptNumber) {
+            return safeReceiptNumber;
+        }
+
+        return safeReceiptNumber.startsWith(safePrefix)
+            ? safeReceiptNumber
+            : `${safePrefix}${safeReceiptNumber}`;
+    } catch (error) {
+        throw withFunctionError("applyReceiptPrefix", error);
     }
 }
 
@@ -1265,6 +1286,7 @@ async function renderIndex(res, options = {}) {
         const lang = getLanguage(options.lang);
         const labels = TRANSLATIONS[lang];
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const allAuditEntries = await readAuditTrail();
         const settings = await readAppSettings();
         const annualThresholdStatus = calculateAnnualThresholdStatus(allTransactions, settings, labels, lang);
         const availableDates = Array.from(new Set(allTransactions.map((item) => item.date).filter(Boolean)))
@@ -1287,6 +1309,7 @@ async function renderIndex(res, options = {}) {
             transactions: pageTransactions,
             totalTransactions,
             hasAnyTransactions: allTransactions.length > 0,
+            hasAnyAuditEntries: allAuditEntries.length > 0,
             filters,
             hasActiveFilters: hasActiveFilters(filters),
             availableDates,
@@ -1420,6 +1443,9 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
 
         const amount = Number(formData.amount);
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const settings = await readAppSettings();
+        const receiptPrefix = String(settings.receiptPrefix || "").trim();
+        const effectiveReceiptNumber = applyReceiptPrefix(formData.receiptNumber, receiptPrefix);
         const paymentMethod = normalizePaymentMethod(formData.payment_method);
         const paymentReference = String(formData.payment_reference || "").trim();
         const status = normalizeStatus(formData.status);
@@ -1505,7 +1531,7 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
             });
         }
 
-        if (hasDuplicateReceiptNumber(allTransactions, formData.receiptNumber)) {
+        if (hasDuplicateReceiptNumber(allTransactions, effectiveReceiptNumber)) {
             return await renderIndex(res, {
                 lang,
                 statusCode: 400,
@@ -1522,7 +1548,7 @@ app.post("/transactions", upload.single("attachment_upload"), async (req, res, n
         }
 
         await addTransaction({
-            receiptNumber: formData.receiptNumber.trim(),
+            receiptNumber: effectiveReceiptNumber,
             amount,
             date: formData.date,
             purpose: formData.purpose.trim(),
@@ -1552,6 +1578,7 @@ app.post("/settings", async (req, res, next) => {
         const annualTotalThreshold = Number(req.body.annualTotalThreshold);
         const annualAlertPercent = Number(req.body.annualAlertPercent);
         const appBrand = String(req.body.appBrand || "").trim();
+        const receiptPrefix = String(req.body.receiptPrefix || "").trim();
         const isValid = Number.isFinite(annualTotalThreshold)
             && annualTotalThreshold > 0
             && Number.isFinite(annualAlertPercent)
@@ -1572,6 +1599,7 @@ app.post("/settings", async (req, res, next) => {
             annualTotalThreshold,
             annualAlertPercent,
             appBrand,
+            receiptPrefix,
         });
 
         return res.redirect(buildIndexPath({ success: 5, page, filters }));
@@ -1786,6 +1814,9 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
 
         const amount = Number(formData.amount);
         const allTransactions = sortTransactionsByCreatedAt(normalizeTransactions(await readTransactions()));
+        const settings = await readAppSettings();
+        const receiptPrefix = String(settings.receiptPrefix || "").trim();
+        const effectiveReceiptNumber = applyReceiptPrefix(formData.receiptNumber, receiptPrefix);
         const paymentMethod = normalizePaymentMethod(formData.payment_method);
         const paymentReference = String(formData.payment_reference || "").trim();
         const status = normalizeStatus(formData.status);
@@ -1852,7 +1883,7 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
             });
         }
 
-        if (hasDuplicateReceiptNumber(allTransactions, formData.receiptNumber, req.params.id)) {
+        if (hasDuplicateReceiptNumber(allTransactions, effectiveReceiptNumber, req.params.id)) {
             return await renderIndex(res, {
                 lang,
                 page,
@@ -1863,7 +1894,7 @@ app.post("/transactions/:id/update", upload.single("attachment_upload"), async (
         }
 
         const updated = await updateTransaction(req.params.id, {
-            receiptNumber: formData.receiptNumber.trim(),
+            receiptNumber: effectiveReceiptNumber,
             amount,
             date: formData.date,
             purpose: formData.purpose.trim(),
@@ -2030,6 +2061,7 @@ app.get("/admin/audit", async (req, res, next) => {
                         : "";
 
         const entries = await readAuditTrail();
+        const allTransactions = normalizeTransactions(await readTransactions());
         const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
         const entriesWithReceipt = entries.map((entry) => ({
             ...entry,
@@ -2043,6 +2075,7 @@ app.get("/admin/audit", async (req, res, next) => {
             labels,
             settings,
             entries: entriesWithReceipt,
+            hasAnyTransactions: allTransactions.length > 0,
             successMessage,
             errorMessage,
             stringifyAuditDetails,

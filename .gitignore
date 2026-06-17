@@ -5,3 +5,4 @@ uploads/*
 .env
 credentials.json
 package-lock.json
+*.ffs_db
